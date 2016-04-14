@@ -1,4 +1,5 @@
 #include "containers.h"
+#include "routines.h"
 #include <iostream>
 
 bool AABB::contains(Point &a) const {                                           //This routine checks if point a is located within a certain axis aligned bounded
@@ -11,16 +12,60 @@ bool AABB::contains(Point &a) const {                                           
 }
 
 bool AABB::intersects(AABB &other) const {
-    if ((top_left.x < other.bottom_right.x) &&
-        (bottom_right.x > other.top_left.x) &&
-        (top_left.y > other.bottom_right.y) &&
-        (bottom_right.y < other.top_left.y)){
+    if ((top_left.x <= other.bottom_right.x) &&
+        (bottom_right.x >= other.top_left.x) &&
+        (top_left.y >= other.bottom_right.y) &&
+        (bottom_right.y <= other.top_left.y)){
         return true;
     }
     else {
         return false;
     }
 }
+
+//bool AABB::intersects(AABB &other) const {
+//    if (((this->bottom_right.x < this->top_left.x) ||
+//        (this->bottom_right.y > this->top_left.y)) ||
+//        ((other.bottom_right.x < other.top_left.x) ||
+//         (other.bottom_right.y > other.top_left.y))){
+//        Point tl = this->top_left;
+//        Point br = this->bottom_right;
+//        Point tr = Point(this->bottom_right.x, this->top_left.y);
+//        Point bl = Point(this->top_left.x, this->bottom_right.y);
+//        if ((checkPointInAABB(tl, other))){
+//            return true;
+//        }
+//        else if (checkPointInAABB(tr, other)){
+//            return true;
+//        }
+//        else if (checkPointInAABB(bl, other)){
+//            return true;
+//        }
+//        else if (checkPointInAABB(br, other)){
+//            return true;
+//        }
+//        else if (checkPointInAABB(other.top_left, *this)){
+//            return true;
+//        }
+//        else if (checkPointInAABB(other.bottom_right, *this)){
+//            return true;
+//        }
+//        else {
+//            return false;
+//        }
+//    }
+//    else {
+//        if ((top_left.x < other.bottom_right.x) &&
+//            (bottom_right.x > other.top_left.x) &&
+//            (top_left.y > other.bottom_right.y) &&
+//            (bottom_right.y < other.top_left.y)){
+//            return true;
+//        }
+//        else {
+//            return false;
+//        }
+//    }
+//}
 
 Quadtree::Quadtree(AABB _boundary) :
     nw{nullptr},
@@ -38,32 +83,62 @@ Quadtree::~Quadtree(){
     delete se;
 }
 
+//void Quadtree::subdivide(){
+//    Point tl = boundary.top_left;
+//    Point br = Point((boundary.bottom_right.x - boundary.top_left.x)/2.0,
+//                     (boundary.top_left.y - boundary.top_left.y)/2.0);
+//    nw = new Quadtree(AABB(tl, br));
+
+//    tl = br;
+//    br = boundary.bottom_right;
+//    se = new Quadtree(AABB(tl, br));
+
+//    tl.x = (boundary.bottom_right.x - boundary.top_left.x)/2.0;
+//    tl.y = boundary.top_left.y;
+//    br.x = boundary.bottom_right.x;
+//    br.y = (boundary.top_left.y - boundary.bottom_right.y)/2.0;
+//    ne = new Quadtree(AABB(tl, br));
+
+//    tl.x = boundary.top_left.x;
+//    tl.y = (boundary.top_left.y - boundary.bottom_right.y)/2.0;
+//    br.x = (boundary.bottom_right.x - boundary.top_left.x);
+//    br.y = boundary.bottom_right.y;
+//    sw = new Quadtree(AABB(tl, br));
+//}
+
 void Quadtree::subdivide(){
     Point tl = boundary.top_left;
-    Point br = Point((boundary.bottom_right.x - boundary.top_left.x)/2.0,
-                     (boundary.top_left.y - boundary.top_left.y)/2.0);
+    Point br = Point(boundary.top_left.x +
+                     (boundary.bottom_right.x - boundary.top_left.x)/2.0,
+                     boundary.bottom_right.y +
+                     (boundary.top_left.y - boundary.bottom_right.y)/2.0);
     nw = new Quadtree(AABB(tl, br));
 
-    tl = br;
+    tl.x = boundary.top_left.x +
+            (boundary.bottom_right.x - boundary.top_left.x)/2.0;
+    tl.y = boundary.bottom_right.y +
+            (boundary.top_left.y - boundary.bottom_right.y)/2.0;
     br = boundary.bottom_right;
     se = new Quadtree(AABB(tl, br));
 
-    tl.x = (boundary.bottom_right.x - boundary.top_left.x)/2.0;
+    tl.x = boundary.top_left.x + (boundary.bottom_right.x - boundary.top_left.x)/2.0;
     tl.y = boundary.top_left.y;
     br.x = boundary.bottom_right.x;
-    br.y = (boundary.top_left.y - boundary.bottom_right.y)/2.0;
+    br.y = boundary.bottom_right.y + (boundary.top_left.y - boundary.bottom_right.y)/2.0;
     ne = new Quadtree(AABB(tl, br));
 
     tl.x = boundary.top_left.x;
-    tl.y = (boundary.top_left.y - boundary.bottom_right.y)/2.0;
-    br.x = (boundary.bottom_right.x - boundary.top_left.x);
+    tl.y = boundary.bottom_right.y + (boundary.top_left.y - boundary.bottom_right.y)/2.0;
+    br.x = boundary.top_left.x + (boundary.bottom_right.x - boundary.top_left.x)/2.0;
     br.y = boundary.bottom_right.y;
     sw = new Quadtree(AABB(tl, br));
 }
 
 bool Quadtree::insert(Cluster d){
-    if (!boundary.intersects(d.area)){
-        return false;
+    for (auto&& area:d.areas){
+        if (!boundary.intersects(area)){
+            return false;
+        }
     }
     if (objects.size() < capacity){
         objects.push_back(d);
@@ -95,8 +170,10 @@ std::vector<Cluster> Quadtree::queryRange(AABB range){                          
     }
 
     for(auto&& object: objects){
-        if(range.intersects(object.area)){
-            pInRange.push_back(object);
+        for (auto&& area:object.areas){
+            if(range.intersects(area)){
+                pInRange.push_back(object);
+            }
         }
     }
 

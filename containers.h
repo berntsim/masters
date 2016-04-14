@@ -27,12 +27,12 @@ struct Particle{
 
 struct Cluster{
     bool joined;
-    AABB area;
-    int index;
+    std::vector<AABB> areas;
     std::vector<Particle> particles;
-    Cluster(bool _joined, AABB _area, std::vector<Particle> _particles,
+    int index;
+    Cluster(bool _joined, std::vector<AABB> _areas, std::vector<Particle> _particles,
             int _index):
-        joined(_joined), area(_area), particles(_particles), index(_index){}
+        joined(_joined), areas(_areas), particles(_particles), index(_index){}
 };
 
 class Quadtree{
@@ -42,10 +42,12 @@ class Quadtree{
         Quadtree* sw;                                                           //Similar, only the sw quarter
         Quadtree* se;                                                           //Similar, only the se quarter
         AABB boundary;                                                          //Boundary of the space partitioned in this node.
+
+
+    public:
         std::vector<Cluster> objects;                                           //These objects should be particles in my case. Note that it would probably make
                                                                                 //sense to not have this as a vector, since I have capacity = 1.
-        static constexpr int capacity = 225;                                      //Setting that every node can at contain at MAXIMUM 1 particle.
-    public:
+        static constexpr int capacity = 225;                                    //Setting that every node can at contain at MAXIMUM 1 particle.
         Quadtree();                                                             //Default constructor. This will set all children to 0, default AABB and objects.
         Quadtree(AABB _boundary);                                               //With this constructor, the boundary is determined by the argument.
 
@@ -54,7 +56,7 @@ class Quadtree{
         bool insert(Cluster d);                                                 //Will insert a cluster object into the appropriate place in the quadtree.
         void subdivide();                                                       //Will split the quadtree to four new regions, making the quadtree recursive.
         std::vector<Cluster> queryRange(AABB range);                            //A function searching the given range for all cluster ovjects who overlap with
-        void clearQadtree();                                                           //this area. These are then put into a list and returned.
+        void clearQadtree();                                                    //this area. These are then put into a list and returned.
 
 };
 

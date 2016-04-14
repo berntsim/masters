@@ -13,18 +13,22 @@ using namespace std;
 int main(){
     bool visualize = true;
     bool varying_size = false;
-    double x_size = 2500;
+    double x_size = 2200;
     double y_size = 1500;
-    int nbr_particles = 100000;
+    int nbr_particles = 10000;
+    double gamma = 1.0;
+    double D_0 = 10;
     double r_p = 1.0;
-    double len = 1.0;
+    double len = 1.001;
     double step_len = 1.0;
+    int iteration_length = 5;
     double step_dir = 0;
     double PI = 3.1415926535897932384626433832;
     int col_with = -1;
+    double dt = 0.1;
 
     sf::Color fill_color = sf::Color::Green;
-    sf::Color fill_color_collision = sf::Color::Red;
+    sf::Color col_fill_color = sf::Color::Red;
     std::vector<sf::CircleShape> to_draw;
     std::vector<sf::RectangleShape> to_draw_rec;
     std::vector<sf::CircleShape> collided;
@@ -41,27 +45,16 @@ int main(){
     auto rand_dir = std::bind(std::uniform_real_distribution<float>(0,2*PI),
                    std::mt19937(seed));
 
-
-    AABB search_range = AABB(Point(x_size/2.0 - 100, y_size/2.0 + 100),
-                             Point(x_size/2.0 + 100, y_size/2.0 - 100));
-    AABB search_range_clust = search_range;
-
-
     std::vector<Cluster> clusters;
     std::map<int, Cluster*> clusters_test;
     std::vector<Cluster> tmp_res;
+    std::vector<Cluster> full_res;
+    std::vector<AABB> search_ranges;
+    std::vector<sf::VertexArray> lines_vec;
+    AABB search_range(Point(0,0), Point(0,0));
     distributeParticlesTest(x_size, y_size, nbr_particles, clusters, rand_seed(),
                         rand_seed(), r_p, varying_size, clusters_test);
-//    std::cout << "clusters_test.size() = " << clusters_test.size() << std::endl;
-//    std::cout << "clusters.size() = " << clusters.size() << std::endl;
-
-
     typedef std::map<int, Cluster*>::iterator it_type;
-//    for(it_type iterator = clusters_test.begin(); iterator != clusters_test.end(); iterator++) {
-//        std::cout << iterator->second->area.top_left.y << std::endl;
-//    }
-
-
 
     if (visualize){
         sf::RenderWindow window(sf::VideoMode(x_size, y_size), "DLCA");
@@ -73,61 +66,101 @@ int main(){
                     window.close();
             }
             window.clear(sf::Color::Black);
-            for(it_type iterator = clusters_test.begin(); iterator != clusters_test.end(); iterator++){
+            for(it_type iterator = clusters_test.begin();
+                iterator != clusters_test.end(); iterator++){
                 if (iterator->second != nullptr){
                     step_dir = rand_dir();
-                    findSearchRange(search_range_clust, iterator->second, len);
-                    tmp_res = BPcolCheck(iterator->second, search_range_clust, tree);
-                    step_len = NPColCheck(iterator->second, tmp_res, len, step_dir, col_with);
-                    takeSingleStep(step_dir, step_len, iterator->second, x_size, y_size);
-                    if (step_len < len){
-                        TestJoinClusters(iterator->second, clusters_test[col_with], clusters_test, col_with);
+//                    len = calcStepLen(iterator->second, gamma, PI, D_0, dt);
+                    for (auto&& area:iterator->second->areas){                  //The following loop prints the areas of the clusters
+                        search_range = testFindSearchRange(area, step_len);
+//                        sf::VertexArray lines = printSearchRange(search_range);
+//                        lines_vec.push_back(lines);
+                        tmp_res = testBPcolCheck(search_range, tree);           //...and checks for collisions.
+                        if (tmp_res.size() > 1){
+                            full_res.insert(full_res.end(), tmp_res.begin(),
+                                            tmp_res.end());
+                        }
+                        tmp_res.clear();
                     }
-//                addToDrawRec(collided_rec, tmp_res, fill_color_collision);
+                    step_len = NPColCheck(iterator->second, full_res, len,
+                                          step_dir, col_with, x_size, y_size);
+                    takeSingleStep(step_dir, step_len, iterator->second,
+                                   x_size, y_size);
+                    if (step_len < len){
+                        TestJoinClusters(iterator->second,
+                                         clusters_test[col_with],
+                                         clusters_test, x_size, y_size);
+                        step_dir = -PI/2.0;
+                    }
+//                    if (full_res.size() > 1){                                       //If collisions occur, the clusters are drawn red
+//                        addToDraw(collided, full_res, col_fill_color);
+//                    }
+                    full_res.clear();
+                    if (iterator->second != nullptr){
+                        splitAreas(*iterator->second, x_size, y_size);
+                    }
                 }
-                tmp_res.clear();
-            }
-            tree.clearQadtree();
-            testPutInQuadtree(clusters_test, tree);
-            testAddToDraw(to_draw, clusters_test, fill_color);
-//            testAddToDrawRec(to_draw_rec, clusters_test, fill_color);
-
-            for (auto&& draw:to_draw){
-                window.draw(draw);
             }
 
-//            for (auto&& draw: collided_rec){
-//                window.draw(draw);
-//            }
+        tree.clearQadtree();
+        testPutInQuadtree(clusters_test, tree);
+        testAddToDraw(to_draw, clusters_test, fill_color);
+        for (auto&& draw:to_draw){
+            window.draw(draw);
+        }
+//        for (auto&& lines:lines_vec){
+//            window.draw(lines);
+//        }
+//        for (auto&& draw:collided){
+//            window.draw(draw);
+//        }
 
-            window.display();
-            collided.clear();
-            to_draw.clear();
-            to_draw_rec.clear();
-            collided_rec.clear();
-//            std::cout << "clusters_test.size() = " << clusters_test.size() << std::endl;
+        window.display();
+        to_draw.clear();
+        lines_vec.clear();
+        collided.clear();
         }
     }
     else {
-//        for (int i = 0; i < 2; ++i){
-//            for (auto&& cluster: clusters){
-//                step_dir = rand_dir();
-//                findSearchRange(search_range_clust, cluster, len);
-//                tmp_res = BPcolCheck(cluster, search_range_clust, tree);
-////                step_len = NPColCheck(cluster, tmp_res, x_size, y_size, len, step_dir);
-//                tmp_res.clear();
-//                takeSingleStep(step_dir, step_len, cluster, x_size, y_size);
+//        for (int i = 0; i < iteration_length; ++i){
+//            std::cout << i << std::endl;
+
+//            for(it_type iterator = clusters_test.begin();
+//                iterator != clusters_test.end(); iterator++){
+//                if (iterator->second != nullptr){
+//                    step_dir = rand_dir();
+//                    for (auto&& area:iterator->second->areas){                  //The following loop prints the areas of the clusters
+//                        search_range = testFindSearchRange(area, 3*step_len);
+//                        tmp_res = testBPcolCheck(search_range, tree);           //...and checks for collisions.
+//                        if (tmp_res.size() > 1){
+//                            full_res.insert(full_res.end(), tmp_res.begin(),
+//                                            tmp_res.end());
+//                        }
+//                        tmp_res.clear();
+//                    }
+//                    step_len = NPColCheck(iterator->second, full_res, len,
+//                                          step_dir, col_with, x_size, y_size);
+//                    takeSingleStep(step_dir, step_len, iterator->second,
+//                                   x_size, y_size);
+//                    if (step_len < len){
+//                        TestJoinClusters(iterator->second,
+//                                         clusters_test[col_with],
+//                                         clusters_test, x_size, y_size);
+//                        step_dir = -PI/2.0;
+//                    }
+//                    full_res.clear();
+//                    if (iterator->second != nullptr){
+//                        splitAreas(*iterator->second, x_size, y_size);
+//                    }
+//                }
 //            }
-
 //            tree.clearQadtree();
-//            putInQuadtree(clusters, tree);
-//            std::cout << "Iteration number: " << i << std::endl;
+//            testPutInQuadtree(clusters_test, tree);
 //        }
-//    }
-    }
-
-    for(it_type iterator = clusters_test.begin(); iterator != clusters_test.end(); iterator++){
-        delete iterator->second;
+        double test_len = calcStepLen(clusters_test.at(0), gamma, PI, D_0, dt);
+        std::cout << "r_p = " << clusters_test.at(0)->particles[0].r_p << std::endl;
+        std::cout << "A = " << PI*pow(clusters_test.at(0)->particles[0].r_p, 2) << std::endl;
+        std::cout << "step_len = " << test_len << std::endl;
     }
     return 0;
 }
