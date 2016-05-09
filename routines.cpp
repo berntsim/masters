@@ -34,23 +34,24 @@ void distributeParticlesTest(int len, int height, int nbr_particles,
     auto rand_size = std::bind(std::uniform_real_distribution<float>(1.0,5.0),
                                std::mt19937(seed_x));
     double dist;
-    int part_placed = 0;
+    int org_size = clust_test.size();
+    int part_placed = clust_test.size();
     Point tmp;
     bool occupied = false;
     std::vector<Particle> tmp_part;
     AABB aabb_tmp = AABB(Point(), Point());
     std::vector<AABB> areas_tmp;
+    velocity vel;
 
-
-    while (int(clusters.size()) < nbr_particles){
+    while (int(clust_test.size()) < org_size + nbr_particles){
         tmp.x = coord_x();
         tmp.y = coord_y();
         if (varying_size){
             r_p = rand_size();
         }
-        for (int i = 0; i < int(clusters.size()); ++i){
-            dist = findDistance(clusters[i].particles[0].pos, tmp, len, height);
-            if (clusters[i].particles[0].r_p + r_p > dist){
+        for (int i = 0; i < int(clust_test.size()); ++i){
+            dist = findDistance(clust_test[i]->particles[0].pos, tmp, len, height);
+            if (clust_test[i]->particles[0].r_p + r_p > dist){
                 occupied = true;
             }
         }
@@ -61,9 +62,10 @@ void distributeParticlesTest(int len, int height, int nbr_particles,
             aabb_tmp.top_left.x = tmp.x - r_p;
             aabb_tmp.top_left.y = tmp.y + r_p;
             areas_tmp.push_back(aabb_tmp);
-//            Cluster tmp_clust = Cluster(aabb_tmp, tmp_part, part_placed);
-            clusters.push_back(Cluster(false, areas_tmp, tmp_part, part_placed));
-            clust_test.insert(std::make_pair(part_placed, new Cluster(false, areas_tmp, tmp_part, part_placed)));
+            clust_test.insert(std::make_pair(part_placed,
+                                             new Cluster(false, areas_tmp,
+                                                         tmp_part, part_placed,
+                                                         r_p, vel)));
             part_placed++;
             tmp_part.clear();
             areas_tmp.clear();
@@ -390,18 +392,12 @@ double LHit(double step_L, double step_dir, Particle one, Particle two,
     }
 
     double dy = one.pos.y - two.pos.y;
-
     if (dy > y_size * 0.5){
         dy = dy - y_size;
     }
     else if (dy <= -y_size * 0.5){
         dy = dy + y_size;
     }
-//    std::cout << std::endl;
-//    std::cout << "pos one = " << one.pos.x << "," << one.pos.y << std::endl;
-//    std::cout << "pos two = " << two.pos.x << "," << two.pos.y << std::endl;
-//    std::cout << "dx = " << dx << ", dy = " << dy << std::endl;
-//    std::cout << "step_dir = " << step_dir << std::endl;
     double d_p = one.r_p + two.r_p;
     double a = 1.0;
     double b = 2.0*(std::cos(step_dir)*(dx) +
@@ -410,21 +406,13 @@ double LHit(double step_L, double step_dir, Particle one, Particle two,
                (-dy)*(-dy) - d_p*d_p;
     double res[2];
     bool sol = true;
-//    std::cout << 2*std::sin(-3.1415926535/2.0)*dy << std::endl;
-//    std::cout << "a = " << a << std::endl;
-//    std::cout << "b = " << b << std::endl;
-//    std::cout << "c = " << c << std::endl;
-//    std::cout << "d_p = " << d_p << std::endl;
     if ((b*b - 4*a*c) < 0){
-//        std::cout << "False solution" << std::endl;
         sol = false;
         return step_L;
     }
     else {
         res[0] = (-b + sqrt(b*b - 4.0*a*c))/(2.0*a);
         res[1] = (-b - sqrt(b*b - 4.0*a*c))/(2.0*a);
-//        std::cout << "res[0] = " << res[0] << std::endl;
-//        std::cout << "res[1] = " << res[1] << std::endl;
         if ((res[0] < res[1]) && ((res[0] > 0) && (res[0] < step_L))){
             return res[0];
         }
@@ -437,12 +425,12 @@ double LHit(double step_L, double step_dir, Particle one, Particle two,
     }
 }
 
-
-double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
-                  double step_len, double step_dir, int &col_with,
+double NPColCheckOrg(Cluster* cluster, std::vector<Cluster> targets,
+                  double step_len, double &step_dir, int &col_with,
                   int x_size, int y_size){
     double tmp;
     double ret_val = step_len;
+    double sx = 0, sy = 0;
     if (cluster != nullptr){
         for (auto&& target : targets){
             if (target.index != cluster->index){
@@ -459,7 +447,73 @@ double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
             }
         }
     }
-    return ret_val;
+    return ret_val;                                                             //Returns the correct step length
+}
+
+
+double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
+                  double &step_len, double &step_dir, int &col_with,
+                  int x_size, int y_size, Quadtree_vel &vel_tree, double dt,
+                  double L_typical, double rho_air, double rho_dust,
+                  double C_sphere, double PI){
+    double tmp;
+    double ret_val;
+    double sx = 0, sy = 0;
+//    double diff_threshold = 2.0*std::pow(10.0, -7.0);
+    if (cluster != nullptr){
+//        velocity temp = vel_tree.queryRange_vel(cluster->particles[0].pos);
+//        if (cluster->radius*L_typical < diff_threshold){
+//            double D = (1.38*std::pow(10.0, -23.0)*293.0*22.0)/
+//                    (6.0*PI*1.75*std::pow(1.80,-5.0)*cluster->radius*L_typical);
+////            double D = 5.34*std::pow(10.0, -8.0)*std::pow((2.0*cluster->radius*L_typical), 2.0);
+//            step_len = std::sqrt(2.0*dt*D)/L_typical;
+//            step_len = 0;
+//            sx += step_len*std::cos(step_dir) + temp.v*std::cos(temp.theta);
+//            sy += step_len*std::sin(step_dir) + temp.v*std::sin(temp.theta);
+//            step_len = std::sqrt(std::pow(sx,2.0) + std::pow(sy, 2.0));
+//        }
+//        else if (cluster->radius*L_typical > diff_threshold){
+//            //Include the drag coefficient here!
+//            double a_x = (rho_air*C_sphere*PI*std::pow(cluster->radius, 2.0)*
+//                          std::pow((cluster->vel.v*std::cos(cluster->vel.theta)-
+//                                    temp.v*std::cos(temp.theta)), 2.0)) /
+//                         (2.0*rho_dust*(4.0/3.0)*PI*
+//                          std::pow(cluster->radius, 3.0));
+//            double a_y = (rho_air*C_sphere*PI*std::pow(cluster->radius, 2.0)*
+//                          std::pow((cluster->vel.v*std::sin(cluster->vel.theta)-
+//                                    temp.v*std::sin(temp.theta)), 2.0)) /
+//                         (2.0*rho_dust*(4.0/3.0)*PI*
+//                          std::pow(cluster->radius, 3.0));
+//            sx += cluster->vel.v*std::cos(cluster->vel.theta) + (a_x*dt);
+//            sy += cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
+//            step_len = std::sqrt(std::pow(sx, 2.0) + std::pow(sy, 2.0));
+//            cluster->vel.v = step_len;
+//            if (std::abs(sx) < std::abs(sy)){
+//                cluster->vel.theta = std::asin(sy/step_len);
+//            }
+//            else {
+//                cluster->vel.theta = std::acos(sx/step_len);
+//            }
+//            step_len = step_len/L_typical;
+//            step_len = 0;
+//        }
+        ret_val = step_len;
+        for (auto&& target : targets){
+            if (target.index != cluster->index){
+                for (auto&& particle: cluster->particles){
+                    for (auto&& tar_part: target.particles){
+                        tmp = LHit(step_len, step_dir, particle, tar_part,
+                                   x_size, y_size);
+                        if (tmp < ret_val){
+                            ret_val = tmp;
+                            col_with = target.index;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return ret_val;                                                             //Returns the correct step length
 }
 
 
@@ -535,6 +589,20 @@ void TestJoinClusters(Cluster* clust, Cluster* other,
             clust->particles.insert(clust->particles.end(),
                                     other->particles.begin(),
                                     other->particles.end());
+            double diameter = 0;
+            for (int i = 0; i < int(clust->particles.size()); ++i){
+                for (int j = i+1; j < int(clust->particles.size()); ++j){
+                    double tmp_diameter = findDistance(clust->particles[i].pos,
+                                                       clust->particles[j].pos,
+                                                       x_size, y_size) +
+                                          clust->particles[i].r_p +
+                                          clust->particles[j].r_p;
+                    if (tmp_diameter> diameter){
+                        diameter = tmp_diameter;
+                    }
+                }
+            }
+            clust->radius = diameter/2.0;
             clusters.at(other->index) = nullptr;
         }
     }
@@ -1654,7 +1722,249 @@ bool consMomentum(int clustIdx, int otherIdx){
 }
 
 
+double findRh(Cluster clust, double x_size, double y_size){
+    double sum = 0;
+    int N = clust.particles.size();
+    for (int i = 0; i < N; ++i){
+        for (int j = 0; j < i; ++j){
+            sum += findDistance(clust.particles[i].pos, clust.particles[j].pos,
+                                x_size, y_size);
+        }
+        for (int j = i+1; j < N; ++j){
+            sum += findDistance(clust.particles[i].pos, clust.particles[j].pos,
+                                x_size, y_size);
+        }
+    }
+    return 1.0/(1.0/(std::pow(N, 2.0)*sum));
+}
 
+velocity calc_vel(Quadtree_vel* vel_tree, Cluster* clust){
+    return vel_tree->queryRange_vel(clust->particles[0].pos);
+}
 
+void takeStepTest(std::map<int, Cluster*> &clusters, Quadtree_vel &vel_tree){
+    velocity tmp;
+    typedef std::map<int, Cluster*>::iterator it_type;
+    for(it_type iterator = clusters.begin(); iterator != clusters.end(); iterator++){
+        if (iterator->second != nullptr){
+            tmp = vel_tree.queryRange_vel(iterator->second->particles[0].pos);
+            iterator->second->particles[0].pos.x += tmp.v*std::cos(tmp.theta);
+            iterator->second->particles[0].pos.y += tmp.v*std::sin(tmp.theta);
+        }
+    }
+}
 
+void visualizeVelocity(std::vector<sf::RectangleShape> &lines,
+                       std::vector<sf::CircleShape> &triangles,
+                       std::vector<sf::Transform> &line_transforms,
+                       std::vector<sf::Transform> &tri_transforms,
+                       int vel_gen, int x_size, int y_size, double PI,
+                       Quadtree_vel &tree){
+    int grid_size = std::sqrt(std::pow(4, vel_gen));
+    double h = std::min(x_size, y_size)/double(grid_size);
+    double scale, tri_len, a;
 
+    Point tmp_p;
+    velocity tmp;
+    for (int i = 0; i < grid_size; ++i){
+        for (int j = 0; j < grid_size; ++j){
+            tmp_p.x = j*h + h/2.0 + 0.01;
+            tmp_p.y = i*h + h/2.0 + 0.01;
+            tmp = tree.queryRange_vel(tmp_p);
+            scale = tmp.v/2.0;
+            tri_len = (h/4.0)*scale;
+            a = std::sqrt(tri_len*tri_len + (tri_len/2.0)*(tri_len/2.0));
+
+            sf::Transform transform;
+            transform.rotate(180 + (180*tmp.theta)/PI, i*h + h/2.0 , j*h + h/2.0);
+            sf::RectangleShape line(sf::Vector2f(h/2.0, 3));
+            line.setPosition(i*h + h/2.0, j*h + h/2.0);
+            lines.push_back(line);
+            line_transforms.push_back(transform);
+
+            sf::Transform tri_trans;
+            tri_trans.rotate(90 + (180*tmp.theta)/PI,
+                             i*h + h/2.0,
+                             j*h + h/2.0).translate(i*h + h/2.0 - tri_len, j*h + h/2.0 - a/2.0);
+            sf::CircleShape triangle(tri_len, 3);
+            triangle.setFillColor(sf::Color::White);
+            triangles.push_back(triangle);
+            tri_transforms.push_back(tri_trans);
+
+        }
+    }
+}
+
+double findLifetime(eddy e){
+    return e.L/std::sqrt(e.E);
+}
+
+void distributeDust(int len, int height, int nbr_particles,
+                    std::mt19937::result_type seed_x, bool varying_size,
+                    std::mt19937::result_type seed_y, double r_p,
+                    std::map<int, Cluster*> &clusters){
+    auto coord_x = std::bind(std::uniform_real_distribution<double>(0,len),     //We define a function to generate a random point in the x-dimension on the domain
+                               std::mt19937(seed_x));
+    auto coord_y = std::bind(std::uniform_real_distribution<double>(0,height),  //similarly for the y-dimension.
+                               std::mt19937(seed_y));
+    auto rand_size = std::bind(std::uniform_real_distribution<float>(1.0,5.0),
+                               std::mt19937(seed_x));
+    double dist;
+    int container_position = clusters.size();
+    int org_size = container_position;
+    Point tmp;
+    bool occupied = false;
+    std::vector<Particle> tmp_part;
+    AABB aabb_tmp = AABB(Point(), Point());
+    std::vector<AABB> areas_tmp;
+    velocity vel;
+
+    while (int(clusters.size()) < org_size + nbr_particles){
+        tmp.x = coord_x();
+        tmp.y = coord_y();
+        if (varying_size){
+            r_p = rand_size();
+        }
+        for (int i = 0; i < int(clusters.size()); ++i){
+            dist = findDistance(clusters[i]->particles[0].pos, tmp, len, height);
+            if (clusters[i]->particles[0].r_p + r_p > dist){
+                occupied = true;
+            }
+        }
+        if (!occupied){
+            tmp_part.push_back(Particle(tmp, r_p));
+            aabb_tmp.bottom_right.x = tmp.x+r_p;
+            aabb_tmp.bottom_right.y = tmp.y - r_p;
+            aabb_tmp.top_left.x = tmp.x - r_p;
+            aabb_tmp.top_left.y = tmp.y + r_p;
+            areas_tmp.push_back(aabb_tmp);
+            clusters.insert(std::make_pair(container_position,
+                                             new Cluster(false, areas_tmp,
+                                                         tmp_part,
+                                                         container_position,
+                                                         r_p, vel)));
+            container_position++;
+            tmp_part.clear();
+            areas_tmp.clear();
+        }
+        occupied = false;                                                       //We reset and prepare to place the next particle.
+    }
+}
+
+void takeSingleStepVel(double step_dir, double len, Cluster* cluster,
+                       int x_size, int y_size, Quadtree_vel &vel_tree){
+    if (cluster != nullptr){
+        velocity tmp = vel_tree.queryRange_vel(cluster->particles[0].pos);
+        for (auto&& particle: cluster->particles){
+            particle.pos.x += len*std::cos(step_dir)+tmp.v*std::cos(tmp.theta);
+            particle.pos.y += len*std::sin(step_dir)+tmp.v*std::sin(tmp.theta);
+            if (particle.pos.x < 0){
+                particle.pos.x += x_size;
+            }
+            else if (particle.pos.x >= x_size){
+                particle.pos.x -= x_size;
+            }
+            if (particle.pos.y < 0){
+                particle.pos.y += y_size;
+            }
+            else if (particle.pos.y >= y_size){
+                particle.pos.y -= y_size;
+            }
+        }
+        for (auto&& area:cluster->areas){
+            area.top_left.x += len*std::cos(step_dir);
+            area.bottom_right.x += len*std::cos(step_dir);
+            area.top_left.y += len*std::sin(step_dir);
+            area.bottom_right.y += len*std::sin(step_dir);
+            if (area.top_left.x < 0){
+                area.top_left.x += x_size;
+            }
+            else if (area.top_left.x > x_size){
+                area.top_left.x -= x_size;
+            }
+            if (area.bottom_right.x < 0){
+                area.bottom_right.x += x_size;
+            }
+            else if (area.bottom_right.x > x_size){
+                area.bottom_right.x -= x_size;
+            }
+            if (area.top_left.y > y_size){
+                area.top_left.y -= y_size;
+            }
+            else if (area.top_left.y < 0){
+                area.top_left.y += y_size;
+            }
+            if (area.bottom_right.y > y_size){
+                area.bottom_right.y -= y_size;
+            }
+            else if (area.bottom_right.y < 0){
+                area.bottom_right.y += y_size;
+            }
+        }
+    }
+}
+
+double findStepLength(Cluster* cluster, Quadtree_vel &vel_tree, double PI,
+                      double dt, double &step_dir, double diff_threshold,
+                      double L_typical, double rho_air, double rho_dust,
+                      double C_sphere){
+    double step_len = 0;
+    if (cluster != nullptr){
+        double sx = 0;
+        double sy = 0;
+        velocity temp = vel_tree.queryRange_vel(cluster->particles[0].pos);
+        if (cluster->radius*L_typical < diff_threshold){
+            double D = (1.38*std::pow(10.0, -23.0)*293.0*22.0)/
+                    (6.0*PI*1.75*std::pow(1.80,-5.0)*cluster->radius*L_typical);
+            step_len = std::sqrt(2.0*dt*D)/L_typical;
+            sx += step_len*std::cos(step_dir) + temp.v*std::cos(temp.theta);
+            sy += step_len*std::sin(step_dir) + temp.v*std::sin(temp.theta);
+            step_len = std::sqrt(std::pow(sx,2.0) + std::pow(sy, 2.0));
+            step_dir = findDirection(sx, sy, PI);
+        }
+        else if (cluster->radius*L_typical > diff_threshold){
+            double a_x = (rho_air*C_sphere*PI*std::pow(cluster->radius, 2.0)*
+                          std::pow((cluster->vel.v*std::cos(cluster->vel.theta)-
+                                    temp.v*std::cos(temp.theta)), 2.0)) /
+                         (2.0*rho_dust*(4.0/3.0)*PI*
+                          std::pow(cluster->radius, 3.0));
+            double a_y = (rho_air*C_sphere*PI*std::pow(cluster->radius, 2.0)*
+                          std::pow((cluster->vel.v*std::sin(cluster->vel.theta)-
+                                    temp.v*std::sin(temp.theta)), 2.0)) /
+                         (2.0*rho_dust*(4.0/3.0)*PI*
+                          std::pow(cluster->radius, 3.0));
+            sx += cluster->vel.v*std::cos(cluster->vel.theta) + (a_x*dt);
+            sy += cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
+            step_len = std::sqrt(std::pow(sx, 2.0) + std::pow(sy, 2.0));
+            cluster->vel.v = step_len;
+            cluster->vel.theta = findDirection(sx, sy, PI);
+            step_len = step_len/L_typical;
+            step_len = 0;
+        }
+        else {
+            std::cout << "something went wrong when calculating step length" << std::endl;
+        }
+    }
+    return step_len;
+}
+
+double findDirection(double dx, double dy, double PI){
+    double hyp = std::sqrt(dx*dx + dy*dy);
+    if ((dx > 0) && (dy > 0)){
+        return std::asin(dy/hyp);
+    }
+    else if ((dx < 0) && (dy > 0)){
+        return std::acos(dx/hyp);
+    }
+    else if ((dx < 0) && (dy < 0)){
+        if (std::abs(dx) < std::abs(dy)){
+            return PI - std::asin(dy/hyp);
+        }
+        else {
+            return 2*PI - std::acos(dx/hyp);
+        }
+    }
+    else if ((dx > 0) && (dy < 0)){
+        return std::asin(dy/hyp);
+    }
+}

@@ -25,14 +25,23 @@ struct Particle{
 
 };
 
+struct velocity{
+    double v, theta;
+    velocity(double _v = 0, double _theta = 0) : v(_v), theta(_theta){}
+};
+
 struct Cluster{
     bool joined;
     std::vector<AABB> areas;
     std::vector<Particle> particles;
     int index;
-    Cluster(bool _joined, std::vector<AABB> _areas, std::vector<Particle> _particles,
-            int _index):
-        joined(_joined), areas(_areas), particles(_particles), index(_index){}
+    double radius;
+    velocity vel;
+    Cluster(bool _joined, std::vector<AABB> _areas,
+            std::vector<Particle> _particles, int _index, double _radius,
+            velocity _vel):
+        joined(_joined), areas(_areas), particles(_particles), index(_index),
+        radius(_radius), vel(_vel){}
 };
 
 class Quadtree{

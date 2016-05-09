@@ -5,7 +5,8 @@ CONFIG -= qt
 
 SOURCES += main.cpp \
     routines.cpp \
-    containers.cpp
+    containers.cpp \
+    vel_field.cpp
 
 
 LIBS += -L"/usr/local/lib"
@@ -18,5 +19,6 @@ DEPENDPATH += "/usr/local/include"
 
 HEADERS += \
     routines.h \
-    containers.h
+    containers.h \
+    vel_field.h
 
