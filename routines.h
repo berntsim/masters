@@ -12,6 +12,8 @@
 #include "vel_field.h"
 
 
+double findDistance(Point a, Point b, double x_size, double y_size);
+
 //void distributeParticles(int len, int height, int nbr_particles,
 //                            std::vector<Cluster> &clusters,
 //                            std::mt19937::result_type seed_x,
@@ -34,16 +36,8 @@ void addToDraw(std::vector<sf::CircleShape> &to_draw,
 
 sf::VertexArray printSearchRange(AABB range);
 
-void putInQuadtree(std::vector<Cluster> clusters, Quadtree &qtree);
-
-void takeStep(std::mt19937::result_type seed, double len,
-              std::vector<Cluster> &clusters,int x_size, int y_size);
-
 void takeSingleStep(double step_dir, double len, Cluster* cluster, int x_size,
                     int y_size);
-
-void findSearchRange(std::vector<AABB> &search_ranges, Cluster* cluster,
-                     double step_len, double x_size, double y_size);
 
 std::vector<Cluster> BPcolCheck(Cluster* cluster,
                                 std::vector<AABB> search_ranges,
@@ -53,16 +47,14 @@ double LHit(double step_L, double step_dir, Particle one, Particle two,
             int x_size, int y_size);
 
 double NPColCheckOrg(Cluster* cluster, std::vector<Cluster> targets,
-                  double step_len, double &step_dir, int &col_with,
+                  double step_len, double step_dir, int &col_with,
                   int x_size, int y_size);
 
 double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
                   double &step_len, double &step_dir, int &col_with,
                   int x_size, int y_size, Quadtree_vel &vel_tree, double dt,
                   double L_typical, double rho_air, double rho_dust,
-                  double C_sphere, double PI);
-
-void joinClusters(Cluster &clust, Cluster &other, std::vector<Cluster> &clusters);
+                  double C_sphere, double PI, bool &will_collide);
 
 
 
@@ -128,9 +120,6 @@ bool otherUpFour(Cluster* clust, Cluster* other);
 
 void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size);
 
-double calcStepLen(Cluster* clust, double gamma, double PI, double D_0,
-                   double dt);
-
 velocity calc_vel(Quadtree_vel *vel_tree, Cluster *clust);
 
 void takeStepTest(std::map<int, Cluster*> &clusters, Quadtree_vel &vel_tree);
@@ -148,9 +137,6 @@ void distributeDust(int len, int height, int nbr_particles,
                     std::mt19937::result_type seed_x, bool varying_size,
                     std::mt19937::result_type seed_y, double r_p,
                     std::map<int, Cluster*> &clusters);
-
-void takeSingleStepVel(double step_dir, double len, Cluster* cluster,
-                       int x_size, int y_size, Quadtree_vel &vel_tree);
 
 double findStepLength(Cluster* cluster, Quadtree_vel &vel_tree, double PI,
                       double dt, double &step_dir, double diff_threshold,

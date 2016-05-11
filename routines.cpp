@@ -92,8 +92,6 @@ void addToDraw(std::vector<sf::CircleShape> &to_draw,
     }
 }
 
-
-
 sf::VertexArray printSearchRange(AABB range){
     sf::VertexArray lines(sf::LinesStrip, 5);
     lines[0].position = sf::Vector2f(range.top_left.x, range.top_left.y);
@@ -104,12 +102,6 @@ sf::VertexArray printSearchRange(AABB range){
     return lines;
 }
 
-void putInQuadtree(std::vector<Cluster> clusters, Quadtree &qtree){
-    for (auto&& cluster: clusters){
-        qtree.insert(cluster);
-    }
-}
-
 void testPutInQuadtree(std::map<int, Cluster*> clusters, Quadtree &qtree){
     typedef std::map<int, Cluster*>::iterator it_type;
     for(it_type iterator = clusters.begin(); iterator != clusters.end(); iterator++){
@@ -118,38 +110,6 @@ void testPutInQuadtree(std::map<int, Cluster*> clusters, Quadtree &qtree){
         }
     }
 }
-
-void takeStep(std::mt19937::result_type seed, double len,
-              std::vector<Cluster> &clusters,int x_size, int y_size){
-    double PI = 3.1415926535897932384626433832;
-    auto rand_dir = std::bind(std::uniform_real_distribution<float>(0,2*PI),
-                   std::mt19937(seed));
-    double dir;
-    for (auto&& cluster: clusters){
-        dir = rand_dir();
-        for (auto&& particle: cluster.particles){
-            particle.pos.x += len*std::cos(dir);
-            particle.pos.y += len*std::sin(dir);
-            if (particle.pos.x < 0){
-                particle.pos.x += x_size;
-            }
-            else if (particle.pos.x >= x_size){
-                particle.pos.x -= x_size;
-            }
-            if (particle.pos.y < 0){
-                particle.pos.y += y_size;
-            }
-            else if (particle.pos.y > y_size){
-                particle.pos.y -= y_size;
-            }
-        }
-        cluster.areas[0].top_left.x += len*std::cos(dir);
-        cluster.areas[0].bottom_right.x += len*std::cos(dir);
-        cluster.areas[0].top_left.y += len*std::sin(dir);
-        cluster.areas[0].bottom_right.y += len*std::sin(dir);
-    }
-}
-
 
 void takeSingleStep(double step_dir, double len, Cluster* cluster, int x_size,
                     int y_size){
@@ -203,178 +163,22 @@ void takeSingleStep(double step_dir, double len, Cluster* cluster, int x_size,
     }
 }
 
-void findSearchRange(std::vector<AABB> &search_ranges, Cluster* cluster,
-                     double step_len, double x_size, double y_size){
-    if (cluster != nullptr){
-        AABB range = AABB(Point(0,0), Point(0,0));
-        double tlx, tly, brx, bry;
-        tlx = cluster->areas[0].top_left.x - step_len;
-        tly = cluster->areas[0].top_left.y + step_len;
-        brx = cluster->areas[0].bottom_right.x + step_len;
-        bry = cluster->areas[0].bottom_right.y - step_len;
-
-        if (tlx < 0){
-            tlx += x_size;
-            if (tly > y_size){
-                tly -= y_size;
-                range.top_left.x = tlx;
-                range.top_left.y = tly;
-                range.bottom_right.x = x_size;
-                range.bottom_right.y = 0;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (1 in notes)
-                range.top_left.y = y_size;
-                range.bottom_right.x = x_size;
-                range.bottom_right.y = bry;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (2 in notes)
-                range.top_left.x = 0;
-                range.top_left.y = tly;
-                range.bottom_right.x = brx;
-                range.bottom_right.y = 0;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (6 in notes)
-                range.top_left.y = y_size;
-                range.bottom_right.x = brx;
-                range.bottom_right.y = bry;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (7 in notes)
-            }
-            else if (bry < 0){
-                bry += y_size;
-                range.top_left.x = tlx;
-                range.top_left.y = y_size;
-                range.bottom_right.x = x_size;
-                range.bottom_right.y = bry;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (3 in notes)
-                range.top_left.x = tlx;
-                range.top_left.y = tly;
-                range.bottom_right.x = x_size;
-                range.bottom_right.y = 0;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (4 in notes)
-                range.top_left.x = 0;
-                range.top_left.y = y_size;
-                range.bottom_right.x = brx;
-                range.bottom_right.y = bry;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (8 in notes)
-                range.top_left.y = tly;
-                range.bottom_right.x = brx;
-                range.bottom_right.y = 0;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (9 in notes)
-            }
-            else {
-                range.top_left.x = tlx;
-                range.top_left.y = tly;
-                range.bottom_right.x = x_size;
-                range.bottom_right.y = bry;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (5 in notes)
-                range.top_left.x = 0;
-                range.bottom_right.x = brx;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (10 in notes)
-            }
-        }
-        else if (brx >= x_size){
-            brx -= x_size;
-            if (tly > y_size){
-                tly -= y_size;
-                range.top_left.x = 0;
-                range.top_left.y = tly;
-                range.bottom_right.x = brx;
-                range.bottom_right.y = 0;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (11 in notes)
-                range.top_left.y = y_size;
-                range.bottom_right.x = brx;
-                range.bottom_right.y = bry;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (12 in notes)
-                range.top_left.x = tlx;
-                range.top_left.y = tly;
-                range.bottom_right.x = x_size;
-                range.bottom_right.y = 0;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (16 in notes)
-                range.top_left.y = y_size;
-                range.bottom_right.x = x_size;
-                range.bottom_right.y = bry;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (17 in notes)
-            }
-            else if (bry < 0){
-                bry += y_size;
-                range.top_left.x = 0;
-                range.top_left.y = y_size;
-                range.bottom_right.x = brx;
-                range.bottom_right.y = bry;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (13 in notes)
-                range.top_left.x = 0;
-                range.top_left.y = tly;
-                range.bottom_right.x = brx;
-                range.bottom_right.y = 0;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (14 in notes)
-                range.top_left.x = tlx;
-                range.top_left.y = y_size;
-                range.bottom_right.x = x_size;
-                range.bottom_right.y = bry;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (18 in notes)
-                range.top_left.y = tly;
-                range.bottom_right.x = x_size;
-                range.bottom_right.y = y_size;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (19 in notes)
-            }
-            else {
-                range.top_left.x = 0;
-                range.top_left.y = tly;
-                range.bottom_right.x = brx;
-                range.bottom_right.y = bry;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (15 in notes)
-                range.top_left.x = tlx;
-                range.bottom_right.x = x_size;
-                search_ranges.push_back(range);                                 //Insert search range into search_ranges (20 in notes)
-            }
-
-        }
-        else if (bry < 0){
-            bry += y_size;
-            range.top_left.x = tlx;
-            range.top_left.y = y_size;
-            range.bottom_right.x = brx;
-            range.bottom_right.y = bry;
-            search_ranges.push_back(range);                                     //Insert search range into search_ranges (21 in notes)
-            range.top_left.y = tly;
-            range.bottom_right.y = 0;
-            search_ranges.push_back(range);                                     //Insert search range into search_ranges (22 in notes)
-
-        }
-        else if (tly >= y_size){
-           tly -= y_size;
-           range.top_left = tly;
-           range.top_left.x = tlx;
-           range.bottom_right.x = brx;
-           range.bottom_right.y = 0;
-           search_ranges.push_back(range);                                      //Insert search range into search_ranges (23 in notes)
-           range.top_left.y = y_size;
-           range.bottom_right.y = bry;
-           search_ranges.push_back(range);                                      //Insert search range into search_ranges (24 in notes)
-        }
-        else {
-            range.top_left.x = tlx;
-            range.top_left.y = tly;
-            range.bottom_right.x = brx;
-            range.bottom_right.y = bry;
-            search_ranges.push_back(range);
-        }
-    }
-}
-
 std::vector<Cluster> BPcolCheck(Cluster* cluster,
                                 std::vector<AABB> search_ranges,
                                 Quadtree &tree){
     std::vector<Cluster> ret_vec;
-    if (cluster != nullptr){
+//    if (cluster != nullptr){
         std::vector<Cluster> tmp_res;
         int index = cluster->index;
         for (auto&& search_range:search_ranges){
             tmp_res = tree.queryRange(search_range);
-            if (tmp_res.size() > 1){
+//            if (tmp_res.size() > 1){
                 for (auto&& res: tmp_res){
-                    if (res.index != index){
+//                    if (res.index != index){
                         ret_vec.push_back(res);
-                    }
-                }
-            }
+//                    }
+//                }
+//            }
         }
     }
     return ret_vec;
@@ -383,6 +187,7 @@ std::vector<Cluster> BPcolCheck(Cluster* cluster,
 double LHit(double step_L, double step_dir, Particle one, Particle two,
             int x_size, int y_size){
     //rewrite the check to take findDistance into account!
+    step_L += 0.001;
     double dx = one.pos.x - two.pos.x;
     if (dx > x_size * 0.5){
         dx = dx - x_size;
@@ -398,6 +203,16 @@ double LHit(double step_L, double step_dir, Particle one, Particle two,
     else if (dy <= -y_size * 0.5){
         dy = dy + y_size;
     }
+
+//    double distance = std::sqrt(dx*dx + dy*dy) - one.r_p - two.r_p;
+//    if (distance < step_L){
+//        return distance;
+//    }
+//    else {
+//        return step_L;
+//    }
+
+
     double d_p = one.r_p + two.r_p;
     double a = 1.0;
     double b = 2.0*(std::cos(step_dir)*(dx) +
@@ -426,18 +241,17 @@ double LHit(double step_L, double step_dir, Particle one, Particle two,
 }
 
 double NPColCheckOrg(Cluster* cluster, std::vector<Cluster> targets,
-                  double step_len, double &step_dir, int &col_with,
+                  double step_len, double step_dir, int &col_with,
                   int x_size, int y_size){
     double tmp;
     double ret_val = step_len;
-    double sx = 0, sy = 0;
     if (cluster != nullptr){
-        for (auto&& target : targets){
+        for (auto&& target:targets){
             if (target.index != cluster->index){
-                for (auto&& particle: cluster->particles){
+                for (auto&& particle:cluster->particles){
                     for (auto&& tar_part: target.particles){
-                        tmp = LHit(step_len, step_dir, particle, tar_part, x_size,
-                                   y_size);
+                        tmp = LHit(step_len, step_dir, particle, tar_part,
+                                   x_size, y_size);
                         if (tmp < ret_val){
                             ret_val = tmp;
                             col_with = target.index;
@@ -455,12 +269,13 @@ double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
                   double &step_len, double &step_dir, int &col_with,
                   int x_size, int y_size, Quadtree_vel &vel_tree, double dt,
                   double L_typical, double rho_air, double rho_dust,
-                  double C_sphere, double PI){
+                  double C_sphere, double PI, bool &will_collide){
     double tmp;
     double ret_val;
     double sx = 0, sy = 0;
-//    double diff_threshold = 2.0*std::pow(10.0, -7.0);
+    double diff_threshold = 2.0*std::pow(10.0, -7.0);
     if (cluster != nullptr){
+        will_collide = false;
 //        velocity temp = vel_tree.queryRange_vel(cluster->particles[0].pos);
 //        if (cluster->radius*L_typical < diff_threshold){
 //            double D = (1.38*std::pow(10.0, -23.0)*293.0*22.0)/
@@ -471,6 +286,7 @@ double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
 //            sx += step_len*std::cos(step_dir) + temp.v*std::cos(temp.theta);
 //            sy += step_len*std::sin(step_dir) + temp.v*std::sin(temp.theta);
 //            step_len = std::sqrt(std::pow(sx,2.0) + std::pow(sy, 2.0));
+//            step_dir = findDirection(sx, sy, PI);
 //        }
 //        else if (cluster->radius*L_typical > diff_threshold){
 //            //Include the drag coefficient here!
@@ -488,15 +304,12 @@ double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
 //            sy += cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
 //            step_len = std::sqrt(std::pow(sx, 2.0) + std::pow(sy, 2.0));
 //            cluster->vel.v = step_len;
-//            if (std::abs(sx) < std::abs(sy)){
-//                cluster->vel.theta = std::asin(sy/step_len);
-//            }
-//            else {
-//                cluster->vel.theta = std::acos(sx/step_len);
-//            }
+//            step_dir = findDirection(sx, sy, PI);
+//            cluster->vel.theta = step_dir;
 //            step_len = step_len/L_typical;
 //            step_len = 0;
 //        }
+
         ret_val = step_len;
         for (auto&& target : targets){
             if (target.index != cluster->index){
@@ -504,6 +317,10 @@ double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
                     for (auto&& tar_part: target.particles){
                         tmp = LHit(step_len, step_dir, particle, tar_part,
                                    x_size, y_size);
+                        if (std::abs(tmp - ret_val) < 0.0001){
+                            will_collide = true;
+                            col_with = target.index;
+                        }
                         if (tmp < ret_val){
                             ret_val = tmp;
                             col_with = target.index;
@@ -515,27 +332,6 @@ double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
     }
     return ret_val;                                                             //Returns the correct step length
 }
-
-
-
-void joinClusters(Cluster &clust, Cluster &other, std::vector<Cluster> &clusters){
-    clust.particles.insert(clust.particles.end(), other.particles.begin(),
-                           other.particles.end());
-    if (other.areas[0].top_left.x < clust.areas[0].top_left.x){
-        clust.areas[0].top_left.y = other.areas[0].top_left.y;
-    }
-    if (other.areas[0].top_left.y > clust.areas[0].top_left.y){
-        clust.areas[0].top_left.y = other.areas[0].top_left.y;
-    }
-    if (other.areas[0].bottom_right.x > clust.areas[0].bottom_right.x){
-        clust.areas[0].bottom_right.x = other.areas[0].bottom_right.x;
-    }
-    if (other.areas[0].bottom_right.y < clust.areas[0].bottom_right.y){
-        clust.areas[0].bottom_right.y = other.areas[0].bottom_right.y;
-    }
-//    clusters.erase(clusters.begin() + other.index);
-}
-
 
 
 
@@ -585,6 +381,7 @@ void TestJoinClusters(Cluster* clust, Cluster* other,
                       int y_size){
     if ((clust != nullptr) && (other != nullptr)){
         if (clust->index != other->index){
+            int org_size = clust->particles.size();
             updateAreas(clust, other, x_size, y_size);
             clust->particles.insert(clust->particles.end(),
                                     other->particles.begin(),
@@ -603,6 +400,9 @@ void TestJoinClusters(Cluster* clust, Cluster* other,
                 }
             }
             clust->radius = diameter/2.0;
+            if (clust->particles.size() != org_size + other->particles.size()){
+                std::cout << "size missmatch for particles" << std::endl;
+            }
             clusters.at(other->index) = nullptr;
         }
     }
@@ -952,7 +752,6 @@ std::vector<Cluster> testBPcolCheck(AABB search_range, Quadtree &tree){
     }
 }
 
-
 int nbrAreasOut(Cluster* clust, Cluster* other, int x_size, int y_size){
     if ((clust != nullptr) && (other != nullptr)){
         if ((crossXBound(*clust, x_size)) && (crossYBound(*other, y_size))){
@@ -974,7 +773,7 @@ int nbrAreasOut(Cluster* clust, Cluster* other, int x_size, int y_size){
 }
 
 bool otherLeftTwo(Cluster* clust, Cluster* other){
-    if (clust->areas[1].bottom_right.x - other->areas[0].top_left.x < 0.1){
+    if (clust->areas[1].bottom_right.x > other->areas[0].top_left.x) {
         return true;
     }
     else {
@@ -982,8 +781,154 @@ bool otherLeftTwo(Cluster* clust, Cluster* other){
     }
 }
 
+bool testOtherLeft(Cluster* other, int x_size){
+    if (other->areas.size() == 1){
+        if ((other->areas[0].top_left.x < x_size/2.0) ||
+            (other->areas[0].bottom_right.x < x_size/2.0)){
+//            std::cout << "other->areas[0].top_left.x = " << (other->areas[0].top_left.x) << std::endl;
+//            std::cout << " x_size/2.0 = " <<  x_size/2.0 << std::endl;
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
+bool testOtherRight(Cluster* other, int x_size){
+    if (other->areas.size() == 1){
+        if ((other->areas[0].top_left.x > x_size/2.0) ||
+            (other->areas[0].bottom_right.x > x_size/2.0)){
+//            std::cout << "other->areas[0].top_left.x = " << (other->areas[0].top_left.x) << std::endl;
+//            std::cout << " x_size/2.0 = " <<  x_size/2.0 << std::endl;
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
+bool testClustLeft(Cluster* clust, int x_size){
+//    std::cout << "clust->areas[0].top_left.x = " << (clust->areas[0].top_left.x) << std::endl;
+//    std::cout << "clust->areas[0].bottom_right.x = " << (clust->areas[0].bottom_right.x) << std::endl;
+//    std::cout << " x_size/2.0 = " <<  x_size/2.0 << std::endl;
+    if (clust->areas.size() == 1){
+        if ((clust->areas[0].top_left.x < x_size/2.0) ||
+            (clust->areas[0].bottom_right.x < x_size/2.0)){
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else if (clust->areas.size() == 2){
+        if ((clust->areas[0].top_left.x < x_size/2.0) ||
+            (clust->areas[0].bottom_right.x < x_size/2.0)){
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
+bool testClustRight(Cluster* clust, int x_size){
+    if (clust->areas.size() == 1){
+        if (clust->areas[0].top_left.x > x_size/2.0){
+            return true;
+        }
+        else if (clust->areas[0].bottom_right.x > x_size/2.0){
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else if (clust->areas.size() == 2){
+        if (clust->areas[0].top_left.x > x_size/2.0){
+            return true;
+        }
+        else if (clust->areas[0].bottom_right.x > x_size/2.0){
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
+bool testClustUp(Cluster* clust, int y_size){
+    if (clust->areas.size() == 1){
+        if (clust->areas[0].top_left.y > y_size/2.0){
+            return true;
+        }
+        else if (clust->areas[0].bottom_right.y > y_size/2.0){
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else if (clust->areas.size() == 2){
+        if (clust->areas[0].top_left.y > y_size/2.0){
+            return true;
+        }
+        else if (clust->areas[0].bottom_right.y > y_size/2.0){
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
+bool testClustDown(Cluster* clust, int y_size){
+    if (clust->areas.size() == 1){
+        if (clust->areas[0].top_left.y < y_size/2.0){
+            return true;
+        }
+        else if (clust->areas[0].bottom_right.y < y_size/2.0){
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else if (clust->areas.size() == 2) {
+        if (clust->areas[0].top_left.y < y_size/2.0){
+            return true;
+        }
+        else if (clust->areas[0].bottom_right.y < y_size/2.0){
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
+
 bool clustLeftTwo(Cluster* clust, Cluster* other){
-    if (clust->areas[0].top_left.x - other->areas[1].bottom_right.x < 0.1){
+    if (clust->areas[0].top_left.x < other->areas[1].bottom_right.x){
         return true;
     }
     else {
@@ -992,7 +937,7 @@ bool clustLeftTwo(Cluster* clust, Cluster* other){
 }
 
 bool otherRightTwo(Cluster* clust, Cluster* other){
-    if (clust->areas[0].top_left.x - other->areas[0].bottom_right.x < 0.1){
+    if (clust->areas[1].top_left.x > other->areas[0].top_left.x){
         return true;
     }
     else {
@@ -1001,7 +946,7 @@ bool otherRightTwo(Cluster* clust, Cluster* other){
 }
 
 bool clustRightTwo(Cluster* clust, Cluster* other){
-    if (other->areas[0].top_left.x - clust->areas[0].bottom_right.x < 0.1){
+    if (other->areas[0].top_left.x < clust->areas[0].bottom_right.x){
         return true;
     }
     else {
@@ -1010,7 +955,7 @@ bool clustRightTwo(Cluster* clust, Cluster* other){
 }
 
 bool otherUpTwo(Cluster* clust, Cluster* other){
-    if (other->areas[0].top_left.y - clust->areas[1].bottom_right.y < 0.1){
+    if (other->areas[0].top_left.y > clust->areas[1].bottom_right.y){
         return true;
     }
     else {
@@ -1019,7 +964,7 @@ bool otherUpTwo(Cluster* clust, Cluster* other){
 }
 
 bool otherDownTwo(Cluster* clust, Cluster* other){
-    if (clust->areas[0].top_left.y - other->areas[0].bottom_right.y < 0.1){
+    if (clust->areas[0].top_left.y < other->areas[0].bottom_right.y){
         return true;
     }
     else {
@@ -1173,6 +1118,32 @@ bool otherUpFour(Cluster* clust, Cluster* other){
 
 
 void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
+//    std::cout << clust->index << " has collided with " << other->index << std::endl;
+//    std::cout << "clust coord: " << clust->particles[0].pos.x << "," << clust->particles[0].pos.y << std::endl;
+//    std::cout << "other coord: " << other->particles[0].pos.x << "," << other->particles[0].pos.y << std::endl;
+
+//    std::cout << "clust[0] tlx = " << clust->areas[0].top_left.x << std::endl;
+//    std::cout << "clust[0] brx = " << clust->areas[0].bottom_right.x << std::endl;
+//    std::cout << "other[0] tlx = " << other->areas[0].top_left.x << std::endl;
+//    std::cout << "other[0] brx = " << other->areas[0].bottom_right.x << std::endl;
+
+
+//    std::cout << "nbr areas out = " << nbrAreasOut(clust, other, x_size, y_size) << std::endl;
+//    std::cout << "does the cluster we focus on cross the x-boundary? " << crossXBound(*clust, x_size) << std::endl;
+//    std::cout << "does the target cross the x-boundary? " << crossXBound(*other, x_size) << std::endl;
+//    std::cout << "does the cluster we focus on cross the y-boundary? " << crossYBound(*clust, x_size) << std::endl;
+//    std::cout << "does the target cross the y-boundary? " << crossYBound(*other, x_size) << std::endl;
+//    if (nbrAreasOut(clust, other, x_size, y_size) == 2){
+//        std::cout << "is the target on the left side of the domain? " << testOtherLeft(other, x_size) << std::endl;
+//        std::cout << "is the target on the right side of the domain? " << testOtherRight(other, x_size) << std::endl;
+//        std::cout << "is the cluster on the left side of the domain? " << testClustLeft(clust, x_size) << std::endl;
+//        std::cout << "is the cluster on the right side of the domain? " << testClustRight(clust, x_size) << std::endl;
+//        std::cout << "is the target on the top side of the domain? " << testClustUp(other, y_size) << std::endl;
+//        std::cout << "is the cluster on the top side of the domain? " <<testClustUp(clust, y_size) << std::endl;
+//    }
+//    std::cout << std::endl;
+
+
     if (nbrAreasOut(clust, other, x_size, y_size) == 1){
         clust->areas[0].top_left.x = std::min(clust->areas[0].top_left.x,
                                               other->areas[0].top_left.x);
@@ -1203,7 +1174,7 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
                 clust->areas[1].bottom_right.y = clust->areas[0].bottom_right.y;
                 return;
             }
-            else if (otherRightTwo(clust, other)){                              //This checks 1) from the notes
+            else if (testOtherRight(other, x_size)){                              //This checks 1) from the notes
                 clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
                                                     other->areas[0].top_left.x);
                 clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
@@ -1221,7 +1192,7 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
                                  other->areas[0].bottom_right.y);
                 return;
             }
-            else if (otherLeftTwo(clust, other)){                               //This checks 2) from the notes
+            else if (testOtherLeft(other, x_size)){                               //This checks 2) from the notes
                 clust->areas[0].top_left.x = clust->areas[0].top_left.x;
                 clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
                                                     other->areas[0].top_left.y);
@@ -1242,11 +1213,24 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
             }
             else {
                 std::cout << "There is an error in updateAreas (A)" << std::endl;
+                std::cout << "clust is at: " << clust->particles[0].pos.x << ","
+                          << clust->particles[0].pos.y << std::endl;
+                std::cout << "other is at: " << other->particles[0].pos.x << ","
+                          << other->particles[0].pos.y << std::endl;
+                std::cout << "clust.areas[1].br.x = " << clust->areas[1].bottom_right.x << std::endl;
+                std::cout << "clust radius = " << clust->radius << std::endl;
+                std::cout << "other radius = " << other->radius << std::endl;
+                std::cout << "nbr areas out = " << nbrAreasOut(clust, other, x_size, y_size) << std::endl;
+                std::cout << "does clust cross x bound? " << crossXBound(*clust, x_size) << std::endl;
+                std::cout << "does other cross x bound? " << crossXBound(*other, x_size) << std::endl;
+                std::cout << "otherLeftTwo = " << otherLeftTwo(clust, other) << std::endl;
+                std::cout << "otherRightTwo = " << otherRightTwo(clust, other) << std::endl;
+                std::cout << std::endl;
             }
         }
         else if (crossXBound(*other, x_size)){                                  //The other cluster crosses the boundary. Have to expand the Areas vector.
             clust->areas.push_back(clust->areas[0]);                            //This is done by just duplicating the 0th element.
-            if (clustRightTwo(clust, other)){                                   //This checks 4) in the notes.
+            if (testClustRight(clust, x_size)){                                 //This checks 4) in the notes.
                 clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
                                                     other->areas[0].top_left.x);
                 clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
@@ -1264,7 +1248,7 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
                                  other->areas[1].bottom_right.y);
                 return;
             }
-            else if (clustLeftTwo(clust, other)){                               //checks 5) in the notes.
+            else if (testClustLeft(clust, x_size)){                               //checks 5) in the notes.
                 clust->areas[0].top_left.x = other->areas[0].top_left.x;
                 clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
                                                     other->areas[0].top_left.y);
@@ -1285,6 +1269,10 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
             }
             else {
                 std::cout << "There is an error in updateAreas (B)" << std::endl;
+                std::cout << clust->particles[0].pos.x << ","
+                          << clust->particles[0].pos.y << std::endl;
+                std::cout << "clust radius = " << clust->radius << std::endl;
+                std::cout << "other radius = " << other->radius << std::endl;
             }
         }
         else if(crossYBound(*clust, y_size)){
@@ -1308,7 +1296,7 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
                                  other->areas[1].bottom_right.y);
                 return;
             }
-            else if (otherUpTwo(clust, other)){                                 //checks 7) in the notes
+            else if (testClustUp(other, y_size)){                                 //checks 7) in the notes OTHER
                 clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
                                                     other->areas[0].top_left.x);
                 clust->areas[0].top_left.y =std::max(clust->areas[0].top_left.y,
@@ -1328,7 +1316,7 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
                                  other->areas[0].bottom_right.y);
                 return;
             }
-            else if (otherDownTwo(clust, other)){                               //checks 8) in the notes.
+            else if (testClustDown(other, y_size)){                               //checks 8) in the notes. OTHER
                 clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
                                                     other->areas[0].top_left.x);
                 clust->areas[0].top_left.y=std::min(clust->areas[0].top_left.y,
@@ -1354,7 +1342,7 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
         }
         else if (crossYBound(*other, y_size)){
             clust->areas.push_back(clust->areas[0]);                            //We have to expand the areas vector.
-            if (otherUpTwo(other, clust)){                                      //checks 9) in notes. Note swapped argument
+            if (testClustUp(clust, y_size)){                                    //checks 9) in notes. CLUST
                 clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
                                                     other->areas[0].top_left.x);
                 clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
@@ -1374,7 +1362,7 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
                                  other->areas[1].bottom_right.y);
                 return;
             }
-            else if (otherDownTwo(other, clust)){                               //checks 10) in the notes. Note swapped argument
+            else if (testClustDown(clust, y_size)){                             //checks 10) in the notes. CLUST
                 clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
                                                     other->areas[0].top_left.x);
                 clust->areas[0].top_left.y=std::min(clust->areas[0].top_left.y,
@@ -1480,7 +1468,7 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
                 }
             }
         }
-        else if ((crossXBound(*other, x_size)) && (crossYBound(*other, x_size))
+        else if ((crossXBound(*other, x_size)) && (crossYBound(*other, y_size))
                  && (clust->areas.size() == 1)){
             if (otherLeftFour(clust, other)){
                 if (otherDownFour(clust, other)){                               //checks 15) in the notes
@@ -1578,7 +1566,8 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
                             std::min(clust->areas[0].top_left.x,
                                      other->areas[0].top_left.x);
                     clust->areas[0].bottom_right = other->areas[0].bottom_right;
-                    clust->areas[1].top_left.x = other->areas[0].top_left.x;
+//                    clust->areas[1].top_left.x = other->areas[0].top_left.x;
+                    clust->areas[1].top_left.x = 0;
                     clust->areas[1].top_left.y =
                             std::max(clust->areas[1].top_left.y,
                                      other->areas[1].top_left.y);
@@ -1692,51 +1681,6 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
     }
 }
 
-double calcStepLen(Cluster* clust, double gamma, double PI, double D_0,
-                   double dt){
-    if (clust != nullptr){
-        double sum = 0;
-        int counter = 0;
-        for (auto&& particle:clust->particles){
-            sum += PI*particle.r_p*particle.r_p;
-            counter ++;
-        }
-        return std::sqrt(2*dt*D_0*std::pow(sum, -gamma));
-    }
-}
-
-
-
-
-
-
-
-
-bool consMomentum(int clustIdx, int otherIdx){
-    if (clustIdx < otherIdx){
-        return true;
-    }
-    else {
-        return false;
-    }
-}
-
-
-double findRh(Cluster clust, double x_size, double y_size){
-    double sum = 0;
-    int N = clust.particles.size();
-    for (int i = 0; i < N; ++i){
-        for (int j = 0; j < i; ++j){
-            sum += findDistance(clust.particles[i].pos, clust.particles[j].pos,
-                                x_size, y_size);
-        }
-        for (int j = i+1; j < N; ++j){
-            sum += findDistance(clust.particles[i].pos, clust.particles[j].pos,
-                                x_size, y_size);
-        }
-    }
-    return 1.0/(1.0/(std::pow(N, 2.0)*sum));
-}
 
 velocity calc_vel(Quadtree_vel* vel_tree, Cluster* clust){
     return vel_tree->queryRange_vel(clust->particles[0].pos);
@@ -1843,64 +1787,12 @@ void distributeDust(int len, int height, int nbr_particles,
                                                          tmp_part,
                                                          container_position,
                                                          r_p, vel)));
+            std::cout << "dust at: " << container_position << std::endl;
             container_position++;
             tmp_part.clear();
             areas_tmp.clear();
         }
         occupied = false;                                                       //We reset and prepare to place the next particle.
-    }
-}
-
-void takeSingleStepVel(double step_dir, double len, Cluster* cluster,
-                       int x_size, int y_size, Quadtree_vel &vel_tree){
-    if (cluster != nullptr){
-        velocity tmp = vel_tree.queryRange_vel(cluster->particles[0].pos);
-        for (auto&& particle: cluster->particles){
-            particle.pos.x += len*std::cos(step_dir)+tmp.v*std::cos(tmp.theta);
-            particle.pos.y += len*std::sin(step_dir)+tmp.v*std::sin(tmp.theta);
-            if (particle.pos.x < 0){
-                particle.pos.x += x_size;
-            }
-            else if (particle.pos.x >= x_size){
-                particle.pos.x -= x_size;
-            }
-            if (particle.pos.y < 0){
-                particle.pos.y += y_size;
-            }
-            else if (particle.pos.y >= y_size){
-                particle.pos.y -= y_size;
-            }
-        }
-        for (auto&& area:cluster->areas){
-            area.top_left.x += len*std::cos(step_dir);
-            area.bottom_right.x += len*std::cos(step_dir);
-            area.top_left.y += len*std::sin(step_dir);
-            area.bottom_right.y += len*std::sin(step_dir);
-            if (area.top_left.x < 0){
-                area.top_left.x += x_size;
-            }
-            else if (area.top_left.x > x_size){
-                area.top_left.x -= x_size;
-            }
-            if (area.bottom_right.x < 0){
-                area.bottom_right.x += x_size;
-            }
-            else if (area.bottom_right.x > x_size){
-                area.bottom_right.x -= x_size;
-            }
-            if (area.top_left.y > y_size){
-                area.top_left.y -= y_size;
-            }
-            else if (area.top_left.y < 0){
-                area.top_left.y += y_size;
-            }
-            if (area.bottom_right.y > y_size){
-                area.bottom_right.y -= y_size;
-            }
-            else if (area.bottom_right.y < 0){
-                area.bottom_right.y += y_size;
-            }
-        }
     }
 }
 
@@ -1933,13 +1825,20 @@ double findStepLength(Cluster* cluster, Quadtree_vel &vel_tree, double PI,
                                     temp.v*std::sin(temp.theta)), 2.0)) /
                          (2.0*rho_dust*(4.0/3.0)*PI*
                           std::pow(cluster->radius, 3.0));
-            sx += cluster->vel.v*std::cos(cluster->vel.theta) + (a_x*dt);
-            sy += cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
-            step_len = std::sqrt(std::pow(sx, 2.0) + std::pow(sy, 2.0));
-            cluster->vel.v = step_len;
-            cluster->vel.theta = findDirection(sx, sy, PI);
-            step_len = step_len/L_typical;
-            step_len = 0;
+//            sx += cluster->vel.v*std::cos(cluster->vel.theta) + (a_x*dt);
+//            sy += cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
+
+            sx = (a_x*dt);
+            sy = (a_y*dt);
+            step_len = 0.1*(std::sqrt(std::pow(sx, 2.0) + std::pow(sy, 2.0))/L_typical);
+            step_dir = findDirection(sx, sy, PI);
+//            step_len = 1.0;
+
+//            step_dir = findDirection(sx, sy, PI);
+//            cluster->vel.v = step_len;
+//            cluster->vel.theta = findDirection(sx, sy, PI);
+//            step_len = step_len/L_typical;
+//            step_len = 0;
         }
         else {
             std::cout << "something went wrong when calculating step length" << std::endl;

@@ -165,9 +165,9 @@ bool Quadtree::insert(Cluster d){
 std::vector<Cluster> Quadtree::queryRange(AABB range){                          //This routine takes in a region defined by AABB and returns any points within
     std::vector<Cluster> pInRange = std::vector<Cluster>();                     //that region. These points are stored in a vector.
 
-    if(!boundary.intersects(range)){                                            //If the region we search is outside the domain, the function return the empty
-        return pInRange;                                                        //vector of points.
-    }
+//    if(!boundary.intersects(range)){                                            //If the region we search is outside the domain, the function return the empty
+//        return pInRange;                                                        //vector of points.
+//    }
 
     for(auto&& object: objects){
         for (auto&& area:object.areas){
