@@ -26,6 +26,22 @@ void distributeParticlesTest(int len, int height, int nbr_particles,
                             std::mt19937::result_type seed_y, double r_p,
                             bool varying_size, std::map<int, Cluster*> &clust_test);
 
+void distributeDust(int len, int height, int nbr_particles,
+                    std::mt19937::result_type seed_x, bool varying_size,
+                    std::mt19937::result_type seed_y, double r_p,
+                    std::map<int, Cluster*> &clusters);
+
+void distributeDustTestSection(int len, int height, int nbr_particles,
+                    std::mt19937::result_type seed_x, bool varying_size,
+                    std::mt19937::result_type seed_y, double r_p,
+                    std::map<int, Cluster*> &clusters);
+
+void distributeParticlesTestSection(int len, int height, int nbr_particles,
+                            std::vector<Cluster> &clusters,
+                            std::mt19937::result_type seed_x,
+                            std::mt19937::result_type seed_y, double r_p,
+                            bool varying_size, std::map<int, Cluster*> &clust_test);
+
 void addToDraw(std::vector<sf::CircleShape> &to_draw,
                std::vector<Cluster> clusters,
                sf::Color fill_color);
@@ -51,7 +67,7 @@ double NPColCheckOrg(Cluster* cluster, std::vector<Cluster> targets,
                   int x_size, int y_size);
 
 double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
-                  double &step_len, double &step_dir, int &col_with,
+                  double &step_len, double step_dir, int &col_with,
                   int x_size, int y_size, Quadtree_vel &vel_tree, double dt,
                   double L_typical, double rho_air, double rho_dust,
                   double C_sphere, double PI, bool &will_collide);
@@ -79,8 +95,10 @@ void testAddToDraw(std::vector<sf::CircleShape> &to_draw,
                sf::Color fill_color);
 
 void TestJoinClusters(Cluster* clust, Cluster* other,
-                      std::map<int, Cluster*> &clusters,
-                      int x_size, int y_size);
+                      std::map<int, Cluster*> &clusters, int x_size,
+                      int y_size, double rho_carbon, double rho_dust,
+                      double r_dust, double r_carbon, double PI,
+                      double L_typical);
 
 void printInformation(Cluster* clust, int col_with);
 
@@ -133,16 +151,14 @@ void visualizeVelocity(std::vector<sf::RectangleShape> &lines,
 
 double findLifetime(eddy e);
 
-void distributeDust(int len, int height, int nbr_particles,
-                    std::mt19937::result_type seed_x, bool varying_size,
-                    std::mt19937::result_type seed_y, double r_p,
-                    std::map<int, Cluster*> &clusters);
-
 double findStepLength(Cluster* cluster, Quadtree_vel &vel_tree, double PI,
                       double dt, double &step_dir, double diff_threshold,
                       double L_typical, double rho_air, double rho_dust,
                       double C_sphere);
 
 double findDirection(double dx, double dy, double PI);
+
+Point FindCM(Cluster clust, double rho_carbon, double rho_dust, double r_dust,
+             double r_carbon, double PI, double L_typical);
 
 #endif // ROUTINES_H

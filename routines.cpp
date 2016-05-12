@@ -21,7 +21,6 @@ double findDistance(Point a, Point b, double x_size, double y_size){
     return std::sqrt(pow(dx,2) + pow(dy,2));
 }
 
-
 void distributeParticlesTest(int len, int height, int nbr_particles,
                             std::vector<Cluster> &clusters,
                             std::mt19937::result_type seed_x,
@@ -65,7 +64,7 @@ void distributeParticlesTest(int len, int height, int nbr_particles,
             clust_test.insert(std::make_pair(part_placed,
                                              new Cluster(false, areas_tmp,
                                                          tmp_part, part_placed,
-                                                         r_p, vel)));
+                                                         r_p, vel, tmp)));
             part_placed++;
             tmp_part.clear();
             areas_tmp.clear();
@@ -74,8 +73,163 @@ void distributeParticlesTest(int len, int height, int nbr_particles,
     }
 }
 
+void distributeDust(int len, int height, int nbr_particles,
+                    std::mt19937::result_type seed_x, bool varying_size,
+                    std::mt19937::result_type seed_y, double r_p,
+                    std::map<int, Cluster*> &clusters){
+    auto coord_x = std::bind(std::uniform_real_distribution<double>(0,len),     //We define a function to generate a random point in the x-dimension on the domain
+                               std::mt19937(seed_x));
+    auto coord_y = std::bind(std::uniform_real_distribution<double>(0,height),  //similarly for the y-dimension.
+                               std::mt19937(seed_y));
+    auto rand_size = std::bind(std::uniform_real_distribution<float>(1.0,5.0),
+                               std::mt19937(seed_x));
+    double dist;
+    int container_position = clusters.size();
+    int org_size = container_position;
+    Point tmp;
+    bool occupied = false;
+    std::vector<Particle> tmp_part;
+    AABB aabb_tmp = AABB(Point(), Point());
+    std::vector<AABB> areas_tmp;
+    velocity vel;
 
+    while (int(clusters.size()) < org_size + nbr_particles){
+        tmp.x = coord_x();
+        tmp.y = coord_y();
+        if (varying_size){
+            r_p = rand_size();
+        }
+        for (int i = 0; i < int(clusters.size()); ++i){
+            dist = findDistance(clusters[i]->particles[0].pos, tmp, len, height);
+            if (clusters[i]->particles[0].r_p + r_p > dist){
+                occupied = true;
+            }
+        }
+        if (!occupied){
+            tmp_part.push_back(Particle(tmp, r_p));
+            aabb_tmp.bottom_right.x = tmp.x+r_p;
+            aabb_tmp.bottom_right.y = tmp.y - r_p;
+            aabb_tmp.top_left.x = tmp.x - r_p;
+            aabb_tmp.top_left.y = tmp.y + r_p;
+            areas_tmp.push_back(aabb_tmp);
+            clusters.insert(std::make_pair(container_position,
+                                             new Cluster(false, areas_tmp,
+                                                         tmp_part,
+                                                         container_position,
+                                                         r_p, vel, tmp)));
+            std::cout << "dust at: " << container_position << std::endl;
+            container_position++;
+            tmp_part.clear();
+            areas_tmp.clear();
+        }
+        occupied = false;                                                       //We reset and prepare to place the next particle.
+    }
+}
 
+void distributeDustTestSection(int len, int height, int nbr_particles,
+                    std::mt19937::result_type seed_x, bool varying_size,
+                    std::mt19937::result_type seed_y, double r_p,
+                    std::map<int, Cluster*> &clusters){
+    auto coord_x = std::bind(std::uniform_real_distribution<double>(len/2.0 - len/4.0, len/2.0 + len/4.0),     //We define a function to generate a random point in the x-dimension on the domain
+                               std::mt19937(seed_x));
+    auto coord_y = std::bind(std::uniform_real_distribution<double>(height/2.0 - height/4.0, height/2.0 + height/4.0),  //similarly for the y-dimension.
+                               std::mt19937(seed_y));
+    auto rand_size = std::bind(std::uniform_real_distribution<float>(1.0,5.0),
+                               std::mt19937(seed_x));
+    double dist;
+    int container_position = clusters.size();
+    int org_size = container_position;
+    Point tmp;
+    bool occupied = false;
+    std::vector<Particle> tmp_part;
+    AABB aabb_tmp = AABB(Point(), Point());
+    std::vector<AABB> areas_tmp;
+    velocity vel;
+
+    while (int(clusters.size()) < org_size + nbr_particles){
+        tmp.x = coord_x();
+        tmp.y = coord_y();
+        if (varying_size){
+            r_p = rand_size();
+        }
+        for (int i = 0; i < int(clusters.size()); ++i){
+            dist = findDistance(clusters[i]->particles[0].pos, tmp, len, height);
+            if (clusters[i]->particles[0].r_p + r_p > dist){
+                occupied = true;
+            }
+        }
+        if (!occupied){
+            tmp_part.push_back(Particle(tmp, r_p));
+            aabb_tmp.bottom_right.x = tmp.x+r_p;
+            aabb_tmp.bottom_right.y = tmp.y - r_p;
+            aabb_tmp.top_left.x = tmp.x - r_p;
+            aabb_tmp.top_left.y = tmp.y + r_p;
+            areas_tmp.push_back(aabb_tmp);
+            clusters.insert(std::make_pair(container_position,
+                                             new Cluster(false, areas_tmp,
+                                                         tmp_part,
+                                                         container_position,
+                                                         r_p, vel, tmp)));
+            std::cout << "dust at: " << container_position << std::endl;
+            container_position++;
+            tmp_part.clear();
+            areas_tmp.clear();
+        }
+        occupied = false;                                                       //We reset and prepare to place the next particle.
+    }
+}
+
+void distributeParticlesTestSection(int len, int height, int nbr_particles,
+                            std::vector<Cluster> &clusters,
+                            std::mt19937::result_type seed_x,
+                            std::mt19937::result_type seed_y, double r_p,
+                            bool varying_size, std::map<int, Cluster*> &clust_test){
+    auto coord_x = std::bind(std::uniform_real_distribution<double>(len/2.0 - len/4.0, len/2.0 + len/4.0),     //We define a function to generate a random point in the x-dimension on the domain
+                               std::mt19937(seed_x));
+    auto coord_y = std::bind(std::uniform_real_distribution<double>(height/2.0 - height/4.0, height/2.0 + height/4.0),  //similarly for the y-dimension.
+                               std::mt19937(seed_y));
+    auto rand_size = std::bind(std::uniform_real_distribution<float>(1.0,5.0),
+                               std::mt19937(seed_x));
+    double dist;
+    int org_size = clust_test.size();
+    int part_placed = clust_test.size();
+    Point tmp;
+    bool occupied = false;
+    std::vector<Particle> tmp_part;
+    AABB aabb_tmp = AABB(Point(), Point());
+    std::vector<AABB> areas_tmp;
+    velocity vel;
+
+    while (int(clust_test.size()) < org_size + nbr_particles){
+        tmp.x = coord_x();
+        tmp.y = coord_y();
+        if (varying_size){
+            r_p = rand_size();
+        }
+        for (int i = 0; i < int(clust_test.size()); ++i){
+            dist = findDistance(clust_test[i]->particles[0].pos, tmp, len, height);
+            if (clust_test[i]->particles[0].r_p + r_p > dist){
+                occupied = true;
+            }
+        }
+        if (!occupied){
+            tmp_part.push_back(Particle(tmp, r_p));
+            aabb_tmp.bottom_right.x = tmp.x+r_p;
+            aabb_tmp.bottom_right.y = tmp.y - r_p;
+            aabb_tmp.top_left.x = tmp.x - r_p;
+            aabb_tmp.top_left.y = tmp.y + r_p;
+            areas_tmp.push_back(aabb_tmp);
+            clust_test.insert(std::make_pair(part_placed,
+                                             new Cluster(false, areas_tmp,
+                                                         tmp_part, part_placed,
+                                                         r_p, vel, tmp)));
+            part_placed++;
+            tmp_part.clear();
+            areas_tmp.clear();
+        }
+        occupied = false;                                                       //We reset and prepare to place the next particle.
+    }
+}
 
 void addToDraw(std::vector<sf::CircleShape> &to_draw,
                std::vector<Cluster> clusters,
@@ -266,50 +420,15 @@ double NPColCheckOrg(Cluster* cluster, std::vector<Cluster> targets,
 
 
 double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
-                  double &step_len, double &step_dir, int &col_with,
+                  double &step_len, double step_dir, int &col_with,
                   int x_size, int y_size, Quadtree_vel &vel_tree, double dt,
                   double L_typical, double rho_air, double rho_dust,
                   double C_sphere, double PI, bool &will_collide){
     double tmp;
     double ret_val;
     double sx = 0, sy = 0;
-    double diff_threshold = 2.0*std::pow(10.0, -7.0);
     if (cluster != nullptr){
         will_collide = false;
-//        velocity temp = vel_tree.queryRange_vel(cluster->particles[0].pos);
-//        if (cluster->radius*L_typical < diff_threshold){
-//            double D = (1.38*std::pow(10.0, -23.0)*293.0*22.0)/
-//                    (6.0*PI*1.75*std::pow(1.80,-5.0)*cluster->radius*L_typical);
-////            double D = 5.34*std::pow(10.0, -8.0)*std::pow((2.0*cluster->radius*L_typical), 2.0);
-//            step_len = std::sqrt(2.0*dt*D)/L_typical;
-//            step_len = 0;
-//            sx += step_len*std::cos(step_dir) + temp.v*std::cos(temp.theta);
-//            sy += step_len*std::sin(step_dir) + temp.v*std::sin(temp.theta);
-//            step_len = std::sqrt(std::pow(sx,2.0) + std::pow(sy, 2.0));
-//            step_dir = findDirection(sx, sy, PI);
-//        }
-//        else if (cluster->radius*L_typical > diff_threshold){
-//            //Include the drag coefficient here!
-//            double a_x = (rho_air*C_sphere*PI*std::pow(cluster->radius, 2.0)*
-//                          std::pow((cluster->vel.v*std::cos(cluster->vel.theta)-
-//                                    temp.v*std::cos(temp.theta)), 2.0)) /
-//                         (2.0*rho_dust*(4.0/3.0)*PI*
-//                          std::pow(cluster->radius, 3.0));
-//            double a_y = (rho_air*C_sphere*PI*std::pow(cluster->radius, 2.0)*
-//                          std::pow((cluster->vel.v*std::sin(cluster->vel.theta)-
-//                                    temp.v*std::sin(temp.theta)), 2.0)) /
-//                         (2.0*rho_dust*(4.0/3.0)*PI*
-//                          std::pow(cluster->radius, 3.0));
-//            sx += cluster->vel.v*std::cos(cluster->vel.theta) + (a_x*dt);
-//            sy += cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
-//            step_len = std::sqrt(std::pow(sx, 2.0) + std::pow(sy, 2.0));
-//            cluster->vel.v = step_len;
-//            step_dir = findDirection(sx, sy, PI);
-//            cluster->vel.theta = step_dir;
-//            step_len = step_len/L_typical;
-//            step_len = 0;
-//        }
-
         ret_val = step_len;
         for (auto&& target : targets){
             if (target.index != cluster->index){
@@ -317,7 +436,7 @@ double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
                     for (auto&& tar_part: target.particles){
                         tmp = LHit(step_len, step_dir, particle, tar_part,
                                    x_size, y_size);
-                        if (std::abs(tmp - ret_val) < 0.0001){
+                        if (std::abs(tmp - ret_val) < 0.00001){
                             will_collide = true;
                             col_with = target.index;
                         }
@@ -378,14 +497,34 @@ void testAddToDraw(std::vector<sf::CircleShape> &to_draw,
 
 void TestJoinClusters(Cluster* clust, Cluster* other,
                       std::map<int, Cluster*> &clusters, int x_size,
-                      int y_size){
+                      int y_size, double rho_carbon, double rho_dust,
+                      double r_dust, double r_carbon, double PI,
+                      double L_typical){
     if ((clust != nullptr) && (other != nullptr)){
         if (clust->index != other->index){
+            for (auto&& particle:clust->particles){
+                if (particle.r_p > 1000){
+                    std::cout << "something is wrong cluster" << std::endl;
+                    std::cout << particle.r_p << std::endl;
+                    std::cout << "particle.size() = " << clust->particles.size() << std::endl;
+
+                }
+            }
+            for (auto&& particle:other->particles){
+                if (particle.r_p > 1000){
+                    particle.r_p = 5.0;
+                }
+            }
             int org_size = clust->particles.size();
             updateAreas(clust, other, x_size, y_size);
             clust->particles.insert(clust->particles.end(),
                                     other->particles.begin(),
                                     other->particles.end());
+            if (clust->vel.v > other->vel.v){
+                clust->vel = other->vel;
+            }
+            clust->CM = FindCM(*clust, rho_carbon, rho_dust, r_dust, r_carbon,
+                   PI, L_typical);
             double diameter = 0;
             for (int i = 0; i < int(clust->particles.size()); ++i){
                 for (int j = i+1; j < int(clust->particles.size()); ++j){
@@ -416,7 +555,6 @@ void printInformation(Cluster* clust, int col_with){
                   << col_with << std::endl;
     }
 }
-
 
 bool crossXBound(Cluster clust, int x_size){
     if (clust.areas.size() == 1){
@@ -926,7 +1064,6 @@ bool testClustDown(Cluster* clust, int y_size){
     }
 }
 
-
 bool clustLeftTwo(Cluster* clust, Cluster* other){
     if (clust->areas[0].top_left.x < other->areas[1].bottom_right.x){
         return true;
@@ -1116,8 +1253,12 @@ bool otherUpFour(Cluster* clust, Cluster* other){
 
 }
 
-
 void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
+    if (nbrAreasOut(clust, other, x_size, y_size) == 3){
+        std::cout << "hi" << std::endl;
+        std::cout << "clust areas size: " << clust->areas.size() << std::endl;
+        std::cout << "other areas size: " << other->areas.size() << std::endl;
+    }
 //    std::cout << clust->index << " has collided with " << other->index << std::endl;
 //    std::cout << "clust coord: " << clust->particles[0].pos.x << "," << clust->particles[0].pos.y << std::endl;
 //    std::cout << "other coord: " << other->particles[0].pos.x << "," << other->particles[0].pos.y << std::endl;
@@ -1213,24 +1354,35 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
             }
             else {
                 std::cout << "There is an error in updateAreas (A)" << std::endl;
-                std::cout << "clust is at: " << clust->particles[0].pos.x << ","
-                          << clust->particles[0].pos.y << std::endl;
-                std::cout << "other is at: " << other->particles[0].pos.x << ","
-                          << other->particles[0].pos.y << std::endl;
-                std::cout << "clust.areas[1].br.x = " << clust->areas[1].bottom_right.x << std::endl;
-                std::cout << "clust radius = " << clust->radius << std::endl;
-                std::cout << "other radius = " << other->radius << std::endl;
+                std::cout << clust->index << " has collided with " << other->index << std::endl;
+                std::cout << "clust coord: " << clust->particles[0].pos.x << "," << clust->particles[0].pos.y << std::endl;
+                std::cout << "other coord: " << other->particles[0].pos.x << "," << other->particles[0].pos.y << std::endl;
+
+                std::cout << "clust[0] tlx = " << clust->areas[0].top_left.x << std::endl;
+                std::cout << "clust[0] brx = " << clust->areas[0].bottom_right.x << std::endl;
+                std::cout << "other[0] tlx = " << other->areas[0].top_left.x << std::endl;
+                std::cout << "other[0] brx = " << other->areas[0].bottom_right.x << std::endl;
+
+
                 std::cout << "nbr areas out = " << nbrAreasOut(clust, other, x_size, y_size) << std::endl;
-                std::cout << "does clust cross x bound? " << crossXBound(*clust, x_size) << std::endl;
-                std::cout << "does other cross x bound? " << crossXBound(*other, x_size) << std::endl;
-                std::cout << "otherLeftTwo = " << otherLeftTwo(clust, other) << std::endl;
-                std::cout << "otherRightTwo = " << otherRightTwo(clust, other) << std::endl;
+                std::cout << "does the cluster we focus on cross the x-boundary? " << crossXBound(*clust, x_size) << std::endl;
+                std::cout << "does the target cross the x-boundary? " << crossXBound(*other, x_size) << std::endl;
+                std::cout << "does the cluster we focus on cross the y-boundary? " << crossYBound(*clust, x_size) << std::endl;
+                std::cout << "does the target cross the y-boundary? " << crossYBound(*other, x_size) << std::endl;
+                if (nbrAreasOut(clust, other, x_size, y_size) == 2){
+                    std::cout << "is the target on the left side of the domain? " << testOtherLeft(other, x_size) << std::endl;
+                    std::cout << "is the target on the right side of the domain? " << testOtherRight(other, x_size) << std::endl;
+                    std::cout << "is the cluster on the left side of the domain? " << testClustLeft(clust, x_size) << std::endl;
+                    std::cout << "is the cluster on the right side of the domain? " << testClustRight(clust, x_size) << std::endl;
+                    std::cout << "is the target on the top side of the domain? " << testClustUp(other, y_size) << std::endl;
+                    std::cout << "is the cluster on the top side of the domain? " <<testClustUp(clust, y_size) << std::endl;
+                }
                 std::cout << std::endl;
             }
         }
         else if (crossXBound(*other, x_size)){                                  //The other cluster crosses the boundary. Have to expand the Areas vector.
-            clust->areas.push_back(clust->areas[0]);                            //This is done by just duplicating the 0th element.
             if (testClustRight(clust, x_size)){                                 //This checks 4) in the notes.
+                clust->areas.push_back(clust->areas[0]);                        //This is done by just duplicating the 0th element.
                 clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
                                                     other->areas[0].top_left.x);
                 clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
@@ -1249,6 +1401,7 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
                 return;
             }
             else if (testClustLeft(clust, x_size)){                               //checks 5) in the notes.
+                clust->areas.push_back(clust->areas[0]);                        //This is done by just duplicating the 0th element.
                 clust->areas[0].top_left.x = other->areas[0].top_left.x;
                 clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
                                                     other->areas[0].top_left.y);
@@ -1269,10 +1422,30 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
             }
             else {
                 std::cout << "There is an error in updateAreas (B)" << std::endl;
-                std::cout << clust->particles[0].pos.x << ","
-                          << clust->particles[0].pos.y << std::endl;
-                std::cout << "clust radius = " << clust->radius << std::endl;
-                std::cout << "other radius = " << other->radius << std::endl;
+                std::cout << clust->index << " has collided with " << other->index << std::endl;
+                std::cout << "clust coord: " << clust->particles[0].pos.x << "," << clust->particles[0].pos.y << std::endl;
+                std::cout << "other coord: " << other->particles[0].pos.x << "," << other->particles[0].pos.y << std::endl;
+
+                std::cout << "clust[0] tlx = " << clust->areas[0].top_left.x << std::endl;
+                std::cout << "clust[0] brx = " << clust->areas[0].bottom_right.x << std::endl;
+                std::cout << "other[0] tlx = " << other->areas[0].top_left.x << std::endl;
+                std::cout << "other[0] brx = " << other->areas[0].bottom_right.x << std::endl;
+
+
+                std::cout << "nbr areas out = " << nbrAreasOut(clust, other, x_size, y_size) << std::endl;
+                std::cout << "does the cluster we focus on cross the x-boundary? " << crossXBound(*clust, x_size) << std::endl;
+                std::cout << "does the target cross the x-boundary? " << crossXBound(*other, x_size) << std::endl;
+                std::cout << "does the cluster we focus on cross the y-boundary? " << crossYBound(*clust, x_size) << std::endl;
+                std::cout << "does the target cross the y-boundary? " << crossYBound(*other, x_size) << std::endl;
+                if (nbrAreasOut(clust, other, x_size, y_size) == 2){
+                    std::cout << "is the target on the left side of the domain? " << testOtherLeft(other, x_size) << std::endl;
+                    std::cout << "is the target on the right side of the domain? " << testOtherRight(other, x_size) << std::endl;
+                    std::cout << "is the cluster on the left side of the domain? " << testClustLeft(clust, x_size) << std::endl;
+                    std::cout << "is the cluster on the right side of the domain? " << testClustRight(clust, x_size) << std::endl;
+                    std::cout << "is the target on the top side of the domain? " << testClustUp(other, y_size) << std::endl;
+                    std::cout << "is the cluster on the top side of the domain? " <<testClustUp(clust, y_size) << std::endl;
+                }
+                std::cout << std::endl;
             }
         }
         else if(crossYBound(*clust, y_size)){
@@ -1681,7 +1854,6 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
     }
 }
 
-
 velocity calc_vel(Quadtree_vel* vel_tree, Cluster* clust){
     return vel_tree->queryRange_vel(clust->particles[0].pos);
 }
@@ -1743,59 +1915,6 @@ double findLifetime(eddy e){
     return e.L/std::sqrt(e.E);
 }
 
-void distributeDust(int len, int height, int nbr_particles,
-                    std::mt19937::result_type seed_x, bool varying_size,
-                    std::mt19937::result_type seed_y, double r_p,
-                    std::map<int, Cluster*> &clusters){
-    auto coord_x = std::bind(std::uniform_real_distribution<double>(0,len),     //We define a function to generate a random point in the x-dimension on the domain
-                               std::mt19937(seed_x));
-    auto coord_y = std::bind(std::uniform_real_distribution<double>(0,height),  //similarly for the y-dimension.
-                               std::mt19937(seed_y));
-    auto rand_size = std::bind(std::uniform_real_distribution<float>(1.0,5.0),
-                               std::mt19937(seed_x));
-    double dist;
-    int container_position = clusters.size();
-    int org_size = container_position;
-    Point tmp;
-    bool occupied = false;
-    std::vector<Particle> tmp_part;
-    AABB aabb_tmp = AABB(Point(), Point());
-    std::vector<AABB> areas_tmp;
-    velocity vel;
-
-    while (int(clusters.size()) < org_size + nbr_particles){
-        tmp.x = coord_x();
-        tmp.y = coord_y();
-        if (varying_size){
-            r_p = rand_size();
-        }
-        for (int i = 0; i < int(clusters.size()); ++i){
-            dist = findDistance(clusters[i]->particles[0].pos, tmp, len, height);
-            if (clusters[i]->particles[0].r_p + r_p > dist){
-                occupied = true;
-            }
-        }
-        if (!occupied){
-            tmp_part.push_back(Particle(tmp, r_p));
-            aabb_tmp.bottom_right.x = tmp.x+r_p;
-            aabb_tmp.bottom_right.y = tmp.y - r_p;
-            aabb_tmp.top_left.x = tmp.x - r_p;
-            aabb_tmp.top_left.y = tmp.y + r_p;
-            areas_tmp.push_back(aabb_tmp);
-            clusters.insert(std::make_pair(container_position,
-                                             new Cluster(false, areas_tmp,
-                                                         tmp_part,
-                                                         container_position,
-                                                         r_p, vel)));
-            std::cout << "dust at: " << container_position << std::endl;
-            container_position++;
-            tmp_part.clear();
-            areas_tmp.clear();
-        }
-        occupied = false;                                                       //We reset and prepare to place the next particle.
-    }
-}
-
 double findStepLength(Cluster* cluster, Quadtree_vel &vel_tree, double PI,
                       double dt, double &step_dir, double diff_threshold,
                       double L_typical, double rho_air, double rho_dust,
@@ -1804,41 +1923,64 @@ double findStepLength(Cluster* cluster, Quadtree_vel &vel_tree, double PI,
     if (cluster != nullptr){
         double sx = 0;
         double sy = 0;
-        velocity temp = vel_tree.queryRange_vel(cluster->particles[0].pos);
+        velocity temp = vel_tree.queryRange_vel(cluster->CM);
         if (cluster->radius*L_typical < diff_threshold){
-            double D = (1.38*std::pow(10.0, -23.0)*293.0*22.0)/
-                    (6.0*PI*1.75*std::pow(1.80,-5.0)*cluster->radius*L_typical);
-            step_len = std::sqrt(2.0*dt*D)/L_typical;
-            sx += step_len*std::cos(step_dir) + temp.v*std::cos(temp.theta);
-            sy += step_len*std::sin(step_dir) + temp.v*std::sin(temp.theta);
-            step_len = std::sqrt(std::pow(sx,2.0) + std::pow(sy, 2.0));
+            double D = (1.38*std::pow(10.0, -23.0)*293.0*10.0)/                 //The 10 is to take cunningham correctino factor into account
+                    (6.0*PI*1.75*std::pow(10.0,-5.0)*cluster->radius*L_typical);
+            step_len = std::sqrt(2.0*dt*D);
+            sx += step_len*std::cos(step_dir) + temp.v*std::cos(temp.theta)*dt;
+            sy += step_len*std::sin(step_dir) + temp.v*std::sin(temp.theta)*dt;
+            step_len = std::sqrt(std::pow(sx,2.0) + std::pow(sy, 2.0))/L_typical;
             step_dir = findDirection(sx, sy, PI);
+//            std::cout << "step_len = " << step_len << " units" << std::endl;
+//            std::cout << "step_len = " << step_len*L_typical << " m" << std::endl;
         }
         else if (cluster->radius*L_typical > diff_threshold){
-            double a_x = (rho_air*C_sphere*PI*std::pow(cluster->radius, 2.0)*
-                          std::pow((cluster->vel.v*std::cos(cluster->vel.theta)-
-                                    temp.v*std::cos(temp.theta)), 2.0)) /
-                         (2.0*rho_dust*(4.0/3.0)*PI*
-                          std::pow(cluster->radius, 3.0));
-            double a_y = (rho_air*C_sphere*PI*std::pow(cluster->radius, 2.0)*
-                          std::pow((cluster->vel.v*std::sin(cluster->vel.theta)-
-                                    temp.v*std::sin(temp.theta)), 2.0)) /
-                         (2.0*rho_dust*(4.0/3.0)*PI*
-                          std::pow(cluster->radius, 3.0));
-//            sx += cluster->vel.v*std::cos(cluster->vel.theta) + (a_x*dt);
-//            sy += cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
+//            std::cout << "cluster->particles.size() = " << cluster->particles.size() << std::endl;
+//            std::cout << "cluster->vel.v = " << cluster->vel.v << " [m/s]" << std::endl;
+//            std::cout << "cluster->vel.theta = " << cluster->vel.theta << " [rad]" << std::endl;
+//            std::cout << "temp.v = " << temp.v << " [m/s]" << std::endl;
+//            std::cout << "temp.theta = " << temp.theta << " [rad]" << std::endl;
+//            std::cout << "v_surr_x = " << temp.v*std::cos(temp.theta) << std::endl;
+//            std::cout << "v_surr_y = " << temp.v*std::sin(temp.theta) << std::endl;
+//            std::cout << "v_clust_x = " << cluster->vel.v*std::cos(cluster->vel.theta) << std::endl;
+//            std::cout << "v_clust_y = " << cluster->vel.v*std::sin(cluster->vel.theta) << std::endl;
+//            std::cout << "cluster->radius = " << cluster->radius << std::endl;
+//            std::cout << "cluster->index = " << cluster->index << std::endl;
 
-            sx = (a_x*dt);
-            sy = (a_y*dt);
-            step_len = 0.1*(std::sqrt(std::pow(sx, 2.0) + std::pow(sy, 2.0))/L_typical);
+            double m_clust = rho_dust*(4.0/3.0)*PI*std::pow(cluster->radius*L_typical,3.0);
+//            std::cout << "m_clust = " << m_clust << std::endl;
+            double A = PI*std::pow(cluster->radius*L_typical, 2.0);
+            double Fx = 0.5*rho_air*std::pow(cluster->vel.v*
+                                             std::cos(cluster->vel.theta) -
+                                             temp.v*std::cos(temp.theta),2.0)*
+                                             C_sphere*A;
+            double Fy = 0.5*rho_air*std::pow(cluster->vel.v*
+                                             std::sin(cluster->vel.theta) -
+                                             temp.v*std::sin(temp.theta),2.0)*
+                                             C_sphere*A;
+            double a_x = Fx/m_clust;
+            double a_y = Fy/m_clust;
+//            std::cout << "a_x = " << a_x << " [m/s^2]" << std::endl;
+//            std::cout << "a_y = " << a_y << " [m/s^2]" << std::endl;
+            double D = (1.38*std::pow(10.0, -23.0)*293.0)/                      //Note no cunningham correction factor here.
+                    (6.0*PI*1.75*std::pow(10.0,-5.0)*cluster->radius*L_typical);
+            step_len = std::sqrt(2.0*dt*D);
+            sx += step_len*std::cos(step_dir) + cluster->vel.v*std::cos(cluster->vel.theta) + (a_x*dt);
+            sy += step_len*std::sin(step_dir) + cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
+//            sx = cluster->vel.v*std::cos(cluster->vel.theta) + (a_x*dt);
+//            sy = cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
+            step_len = std::sqrt(std::pow(sx, 2.0) + std::pow(sy, 2.0));
             step_dir = findDirection(sx, sy, PI);
-//            step_len = 1.0;
-
-//            step_dir = findDirection(sx, sy, PI);
-//            cluster->vel.v = step_len;
-//            cluster->vel.theta = findDirection(sx, sy, PI);
-//            step_len = step_len/L_typical;
-//            step_len = 0;
+//            std::cout << "Fx = " << Fx << std::endl;
+//            std::cout << "Fy = " << Fy << std::endl;
+//            std::cout << "step_len = " << step_len << " [m/s]" << std::endl;
+//            std::cout << "step_len = " << (step_len/L_typical)*dt << " [units/timestep]" << std::endl;
+//            std::cout << "step_dir = " << step_dir << std::endl;
+//            std::cout << std::endl;
+            cluster->vel.v = step_len;
+            cluster->vel.theta = step_dir;
+            step_len = (step_len/L_typical)*dt;
         }
         else {
             std::cout << "something went wrong when calculating step length" << std::endl;
@@ -1866,4 +2008,26 @@ double findDirection(double dx, double dy, double PI){
     else if ((dx > 0) && (dy < 0)){
         return std::asin(dy/hyp);
     }
+}
+
+Point FindCM(Cluster clust, double rho_carbon, double rho_dust, double r_dust,
+             double r_carbon, double PI, double L_typical){
+    double M = 0, m = 0;
+    double sum_x = 0, sum_y = 0;
+    for (auto && particle:clust.particles){
+        if (particle.r_p == r_carbon){
+            m = rho_carbon*(4.0/3.0)*PI*std::pow(particle.r_p*L_typical, 3.0);
+            M += m;
+            sum_x += m*particle.pos.x;
+            sum_y += m*particle.pos.y;
+
+        }
+        else if (particle.r_p == r_dust){
+            m = rho_dust*(4.0/3.0)*PI*std::pow(particle.r_p*L_typical, 3.0);
+            M += m;
+            sum_x += m*particle.pos.x;
+            sum_y += m*particle.pos.y;
+        }
+    }
+    return Point(sum_x/M, sum_y/M);
 }
