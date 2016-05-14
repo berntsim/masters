@@ -22,7 +22,7 @@ double findDistance(Point a, Point b, double x_size, double y_size){
 }
 
 void distributeParticlesTest(int len, int height, int nbr_particles,
-                            std::vector<Cluster> &clusters,
+                            double rho_carbon, double PI,
                             std::mt19937::result_type seed_x,
                             std::mt19937::result_type seed_y, double r_p,
                             bool varying_size, std::map<int, Cluster*> &clust_test){
@@ -41,6 +41,7 @@ void distributeParticlesTest(int len, int height, int nbr_particles,
     AABB aabb_tmp = AABB(Point(), Point());
     std::vector<AABB> areas_tmp;
     velocity vel;
+    double mass = 0;
 
     while (int(clust_test.size()) < org_size + nbr_particles){
         tmp.x = coord_x();
@@ -55,6 +56,7 @@ void distributeParticlesTest(int len, int height, int nbr_particles,
             }
         }
         if (!occupied){
+            mass = rho_carbon*(4.0/3.0)*PI*std::pow(r_p, 3.0);
             tmp_part.push_back(Particle(tmp, r_p));
             aabb_tmp.bottom_right.x = tmp.x+r_p;
             aabb_tmp.bottom_right.y = tmp.y - r_p;
@@ -64,7 +66,7 @@ void distributeParticlesTest(int len, int height, int nbr_particles,
             clust_test.insert(std::make_pair(part_placed,
                                              new Cluster(false, areas_tmp,
                                                          tmp_part, part_placed,
-                                                         r_p, vel, tmp)));
+                                                         r_p, vel, tmp, mass)));
             part_placed++;
             tmp_part.clear();
             areas_tmp.clear();
@@ -76,7 +78,8 @@ void distributeParticlesTest(int len, int height, int nbr_particles,
 void distributeDust(int len, int height, int nbr_particles,
                     std::mt19937::result_type seed_x, bool varying_size,
                     std::mt19937::result_type seed_y, double r_p,
-                    std::map<int, Cluster*> &clusters){
+                    std::map<int, Cluster*> &clusters, double rho_dust,
+                    double PI){
     auto coord_x = std::bind(std::uniform_real_distribution<double>(0,len),     //We define a function to generate a random point in the x-dimension on the domain
                                std::mt19937(seed_x));
     auto coord_y = std::bind(std::uniform_real_distribution<double>(0,height),  //similarly for the y-dimension.
@@ -92,6 +95,7 @@ void distributeDust(int len, int height, int nbr_particles,
     AABB aabb_tmp = AABB(Point(), Point());
     std::vector<AABB> areas_tmp;
     velocity vel;
+    double mass = 0;
 
     while (int(clusters.size()) < org_size + nbr_particles){
         tmp.x = coord_x();
@@ -106,6 +110,7 @@ void distributeDust(int len, int height, int nbr_particles,
             }
         }
         if (!occupied){
+            mass = rho_dust*(4.0/3.0)*PI*std::pow(r_p, 3.0);
             tmp_part.push_back(Particle(tmp, r_p));
             aabb_tmp.bottom_right.x = tmp.x+r_p;
             aabb_tmp.bottom_right.y = tmp.y - r_p;
@@ -116,7 +121,7 @@ void distributeDust(int len, int height, int nbr_particles,
                                              new Cluster(false, areas_tmp,
                                                          tmp_part,
                                                          container_position,
-                                                         r_p, vel, tmp)));
+                                                         r_p, vel, tmp, mass)));
             std::cout << "dust at: " << container_position << std::endl;
             container_position++;
             tmp_part.clear();
@@ -129,7 +134,8 @@ void distributeDust(int len, int height, int nbr_particles,
 void distributeDustTestSection(int len, int height, int nbr_particles,
                     std::mt19937::result_type seed_x, bool varying_size,
                     std::mt19937::result_type seed_y, double r_p,
-                    std::map<int, Cluster*> &clusters){
+                    std::map<int, Cluster*> &clusters, double rho_dust,
+                                double PI){
     auto coord_x = std::bind(std::uniform_real_distribution<double>(len/2.0 - len/4.0, len/2.0 + len/4.0),     //We define a function to generate a random point in the x-dimension on the domain
                                std::mt19937(seed_x));
     auto coord_y = std::bind(std::uniform_real_distribution<double>(height/2.0 - height/4.0, height/2.0 + height/4.0),  //similarly for the y-dimension.
@@ -145,6 +151,7 @@ void distributeDustTestSection(int len, int height, int nbr_particles,
     AABB aabb_tmp = AABB(Point(), Point());
     std::vector<AABB> areas_tmp;
     velocity vel;
+    double mass = 0;
 
     while (int(clusters.size()) < org_size + nbr_particles){
         tmp.x = coord_x();
@@ -159,6 +166,7 @@ void distributeDustTestSection(int len, int height, int nbr_particles,
             }
         }
         if (!occupied){
+            mass = rho_dust*(4.0/3.0)*PI*std::pow(r_p, 3.0);
             tmp_part.push_back(Particle(tmp, r_p));
             aabb_tmp.bottom_right.x = tmp.x+r_p;
             aabb_tmp.bottom_right.y = tmp.y - r_p;
@@ -169,7 +177,7 @@ void distributeDustTestSection(int len, int height, int nbr_particles,
                                              new Cluster(false, areas_tmp,
                                                          tmp_part,
                                                          container_position,
-                                                         r_p, vel, tmp)));
+                                                         r_p, vel, tmp, mass)));
             std::cout << "dust at: " << container_position << std::endl;
             container_position++;
             tmp_part.clear();
@@ -180,7 +188,7 @@ void distributeDustTestSection(int len, int height, int nbr_particles,
 }
 
 void distributeParticlesTestSection(int len, int height, int nbr_particles,
-                            std::vector<Cluster> &clusters,
+                            double rho_carbon, double PI,
                             std::mt19937::result_type seed_x,
                             std::mt19937::result_type seed_y, double r_p,
                             bool varying_size, std::map<int, Cluster*> &clust_test){
@@ -199,6 +207,7 @@ void distributeParticlesTestSection(int len, int height, int nbr_particles,
     AABB aabb_tmp = AABB(Point(), Point());
     std::vector<AABB> areas_tmp;
     velocity vel;
+    double mass = 0;
 
     while (int(clust_test.size()) < org_size + nbr_particles){
         tmp.x = coord_x();
@@ -213,6 +222,7 @@ void distributeParticlesTestSection(int len, int height, int nbr_particles,
             }
         }
         if (!occupied){
+            mass = rho_carbon*(4.0/3.0)*PI*std::pow(r_p, 3.0);
             tmp_part.push_back(Particle(tmp, r_p));
             aabb_tmp.bottom_right.x = tmp.x+r_p;
             aabb_tmp.bottom_right.y = tmp.y - r_p;
@@ -222,7 +232,7 @@ void distributeParticlesTestSection(int len, int height, int nbr_particles,
             clust_test.insert(std::make_pair(part_placed,
                                              new Cluster(false, areas_tmp,
                                                          tmp_part, part_placed,
-                                                         r_p, vel, tmp)));
+                                                         r_p, vel, tmp, mass)));
             part_placed++;
             tmp_part.clear();
             areas_tmp.clear();
@@ -502,27 +512,12 @@ void TestJoinClusters(Cluster* clust, Cluster* other,
                       double L_typical){
     if ((clust != nullptr) && (other != nullptr)){
         if (clust->index != other->index){
-            for (auto&& particle:clust->particles){
-                if (particle.r_p > 1000){
-                    std::cout << "something is wrong cluster" << std::endl;
-                    std::cout << particle.r_p << std::endl;
-                    std::cout << "particle.size() = " << clust->particles.size() << std::endl;
-
-                }
-            }
-            for (auto&& particle:other->particles){
-                if (particle.r_p > 1000){
-                    particle.r_p = 5.0;
-                }
-            }
             int org_size = clust->particles.size();
             updateAreas(clust, other, x_size, y_size);
+            consMomentum(clust, *other, PI);
             clust->particles.insert(clust->particles.end(),
                                     other->particles.begin(),
                                     other->particles.end());
-            if (clust->vel.v > other->vel.v){
-                clust->vel = other->vel;
-            }
             clust->CM = FindCM(*clust, rho_carbon, rho_dust, r_dust, r_carbon,
                    PI, L_typical);
             double diameter = 0;
@@ -2030,4 +2025,50 @@ Point FindCM(Cluster clust, double rho_carbon, double rho_dust, double r_dust,
         }
     }
     return Point(sum_x/M, sum_y/M);
+}
+
+void consMomentum(Cluster* clust, Cluster other, double PI){
+    double px_c = 0, py_c = 0, px_o = 0, py_o = 0, p = 0, theta = 0;            //Momentum in x and y direction for cluster and other respectively.
+    px_c = clust->mass*clust->vel.v*std::cos(clust->vel.theta);
+    py_c = clust->mass*clust->vel.v*std::sin(clust->vel.theta);
+    px_o = other.mass*other.vel.v*std::cos(other.vel.theta);
+    py_o = other.mass*other.vel.v*std::sin(other.vel.theta);
+
+    px_c += px_o;
+    py_c += py_o;
+
+    p = std::sqrt(px_c*px_c + py_c*py_c);
+    theta = findDirection(px_c, py_c, PI);
+    clust->vel.v = p/(clust->mass + other.mass);
+    clust->vel.theta = theta;
+}
+
+double findSystemSize(double r_p, double Cc, double PI, double dt,
+                      double L_typical, int vel_generations, double E_0,
+                      double p1, double simulation_time, double dust_density,
+                      double carbon_density, int tot_objects){
+    double D = (1.38*std::pow(10.0, -23.0)*293.0*Cc)/
+            (6.0*PI*1.75*std::pow(10.0,-5.0)*r_p*L_typical);
+    double diff_step_len = std::sqrt(2.0*dt*D);
+    double u_highest = 0;
+    for (int i = 0; i < vel_generations; ++i){
+        u_highest += std::sqrt(std::pow(p1, i)*E_0);
+    }
+    double max_movement = u_highest*(dt/L_typical) + diff_step_len/L_typical;   //units/timestep is the the dimensionless displacement.
+//    double size = 2*max_movement*(L_typical/dt)*simulation_time;
+    std::cout << "dust_density = " << dust_density << std::endl;
+    std::cout << "dust distribution size = " << u_highest*(dt/L_typical)*simulation_time/dt << std::endl;
+    int nbr_dust = round(dust_density*u_highest*(dt/L_typical)*simulation_time/dt);
+    std::cout << "nbr_dust = " << nbr_dust << std::endl;
+    std::cout << "spread over a square of size " << u_highest*(dt/L_typical)*200 << std::endl;
+    double size = 2*max_movement*(L_typical/dt)*simulation_time +
+                findCarbonDistributionSize(carbon_density, tot_objects, nbr_dust);
+    return size;
+}
+
+double findCarbonDistributionSize(double carbon_density, int tot_objects,
+                                  int nbr_dust){
+    double size = std::sqrt((tot_objects - nbr_dust)/(carbon_density));
+    std::cout << tot_objects - nbr_dust << " carbon particles spread over " << size << " [ units] squared area" << std::endl;
+    return size;
 }

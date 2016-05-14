@@ -21,7 +21,7 @@ double findDistance(Point a, Point b, double x_size, double y_size);
 //                            bool varying_size);
 
 void distributeParticlesTest(int len, int height, int nbr_particles,
-                            std::vector<Cluster> &clusters,
+                            double rho_carbon, double PI,
                             std::mt19937::result_type seed_x,
                             std::mt19937::result_type seed_y, double r_p,
                             bool varying_size, std::map<int, Cluster*> &clust_test);
@@ -29,15 +29,17 @@ void distributeParticlesTest(int len, int height, int nbr_particles,
 void distributeDust(int len, int height, int nbr_particles,
                     std::mt19937::result_type seed_x, bool varying_size,
                     std::mt19937::result_type seed_y, double r_p,
-                    std::map<int, Cluster*> &clusters);
+                    std::map<int, Cluster*> &clusters, double rho_dust,
+                    double PI);
 
 void distributeDustTestSection(int len, int height, int nbr_particles,
                     std::mt19937::result_type seed_x, bool varying_size,
                     std::mt19937::result_type seed_y, double r_p,
-                    std::map<int, Cluster*> &clusters);
+                    std::map<int, Cluster*> &clusters, double rho_dust,
+                               double PI);
 
 void distributeParticlesTestSection(int len, int height, int nbr_particles,
-                            std::vector<Cluster> &clusters,
+                            double rho_carbon, double PI,
                             std::mt19937::result_type seed_x,
                             std::mt19937::result_type seed_y, double r_p,
                             bool varying_size, std::map<int, Cluster*> &clust_test);
@@ -160,5 +162,15 @@ double findDirection(double dx, double dy, double PI);
 
 Point FindCM(Cluster clust, double rho_carbon, double rho_dust, double r_dust,
              double r_carbon, double PI, double L_typical);
+
+void consMomentum(Cluster* clust, Cluster other, double PI);
+
+double findSystemSize(double r_p, double Cc, double PI, double dt,
+                      double L_typical, int vel_generations, double E_0,
+                      double p1, double simulation_time, double dust_density,
+                      double carbon_density, int tot_objects);
+
+double findCarbonDistributionSize(double carbon_density, int tot_objects,
+                                  int nbr_dust);
 
 #endif // ROUTINES_H

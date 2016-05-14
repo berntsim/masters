@@ -16,21 +16,23 @@ int main(){
     clock_t t1,t2;
     t1=clock();
 //--------------------Governing parameters for simulation-----------------------
-    bool test_environment = true;                                               //The case for testing stuff.
-    bool visualize = true;
+    bool test_environment = false;                                               //The case for testing stuff.
+    bool visualize = false;
     bool varying_size = false;
     bool var_dust_size = false;
     bool velocity_field = false;
     bool last_working = false;
-    int iteration_length = 7;                                                   //If there are no visualization going on, then this parameter controls runtime
+    bool proper_simulation = true;
+    int iteration_length = 1;                                                   //If there are no visualization going on, then this parameter controls runtime
+
 
     double L_typical = 1.0*std::pow(10.0,-8.0);                                 //The typical length of the system, used to non-dimensionlize the problem.
-    double u_0 = 0.1;                                                          //velocity of the largest eddy.
+    double u_0 = 0.18;                                                          //velocity of the largest eddy.
     double E_0 = std::pow(u_0, 2.0);                                               //The initial energy of the largest eddy.
 //    double L_0 = 0.01/L_typical;                                                //The physical length of the system.
-    double L_0 = 0.01;
+    double L_0 = 0.01;                                                          //The size of the largest eddy.
     double system_size = 1400;                                                  //The systme size with respect to the displayed window.
-    int nbr_particles = 20;                                                    //Number of BC particles, who will later join together as clusters.
+    int nbr_particles = 500;                                                    //Number of BC particles, who will later join together as clusters.
     int nbr_dust_particles = 2;                                                //Number of mineral dust particles.
     double r_p = 3.0*std::pow(10.0,-8.0)/L_typical;                             //Radius of BC monomers. By definition unity in these simulations (L_typical)
     double r_dust = (1.0*std::pow(10.0,-6.0))/L_typical;                        //Radius of dust particles.
@@ -38,9 +40,12 @@ int main(){
     double rho_dust = (2.65+2.60+2.75+2.35+2.82+2.95+2.71+2.87+2.30)/9.0;       //Mass density of dust. Average of the article listing rho's
     double rho_carbon = 2.0;                                                    //estimation for amorphous carbon, Lide, D.R.CRC Handbook of Chemistry and Physics, 85th Edition
     double C_sphere = 0.47;                                                     //drag coefficient for spherical shape.
-    int vel_generations = 8;                                                    //Essentialy sets the "resolution" of the turbulent velocity field.
+    int vel_generations = 9;                                                    //Essentialy sets the "resolution" of the turbulent velocity field.
     double diff_threshold = 5.0*std::pow(10.0, -7.0);                           //Sets limit for when one takes diffusion into account.
-    double iteration_time = 0;                                                  //The time of the simulation. Only used with non-visual simulations.
+    double simulation_time = 0.1;                                               //The time of the simulation. Only used with non-visual simulations.
+    int tot_objects = 10000;
+    double dust_density = 0.000003;                                             //Sets the density of the dust particles we want to distribute. [nbr_part/units]
+    double carbon_density = 100*dust_density;                                   //Sets the density of the carbon particles we distribute.
 
 //--------------------------Constants for the simulations-----------------------
     double x_size = system_size;                                                //Defines the size of the system for visualization.
@@ -52,11 +57,12 @@ int main(){
     int col_with = -1;                                                          //Initializing the ID og collision target to be invalid at the start.
     double t = 0;                                                               //Starting time. Physical time during simulation.
 //    double dt = (system_size*L_typical)/(std::sqrt(E_0));                       //Time step.
-    double dt = 0.1/(u_0/L_typical);                                           //time step.
+    double dt = 10.0/(u_0/L_typical);                                           //time step.
     double p1 = 0.7;                                                            //Defines the model used for turbulence. The multiplicative increment
     double p2 = 1.0-p1;                                                         //is taken from the original article.
     std::cout << "dt = " << dt << std::endl;
-    std::cout << "rho_dust = " << rho_dust << std::endl;
+    double Cc = 10.0;
+
 //----------------------------Containers initialization-------------------------
     sf::Color fill_color = sf::Color::Green;
     sf::Color col_fill_color = sf::Color::Red;
@@ -81,17 +87,17 @@ int main(){
     std::mt19937 g(rd());
 
 //-----------------------------Declaring containers ----------------------------
-    std::vector<Cluster> clusters;
     std::map<int, Cluster*> clusters_test;
     std::vector<Cluster> tmp_res;
     std::vector<Cluster> full_res;
-    std::vector<AABB> search_ranges;
     std::vector<sf::VertexArray> lines_vec;
     AABB search_range(Point(0,0), Point(0,0));
     distributeDust(x_size, y_size, nbr_dust_particles, rand_seed(),
-                   var_dust_size, rand_seed(), r_dust, clusters_test);
-    distributeParticlesTest(x_size, y_size, nbr_particles, clusters, rand_seed(),
-                        rand_seed(), r_p, varying_size, clusters_test);
+                   var_dust_size, rand_seed(), r_dust, clusters_test, rho_dust,
+                   PI);
+    distributeParticlesTest(x_size, y_size, nbr_particles, rho_carbon, PI,
+                            rand_seed(), rand_seed(), r_p, varying_size,
+                            clusters_test);
     typedef std::map<int, Cluster*>::iterator it_type;
     AABB_vel vel_domain = AABB_vel(Point(0,y_size), Point(x_size,0));
     eddy init_eddy(E_0, rand_dir(), L_0);
@@ -113,10 +119,11 @@ int main(){
     if (test_environment){                                                      //This is used only for testing purposes.
         clusters_test.clear();
         distributeDustTestSection(x_size, y_size, 2, rand_seed(),
-                       var_dust_size, rand_seed(), r_dust, clusters_test);
-        distributeParticlesTestSection(x_size, y_size, nbr_particles, clusters,
-                                       rand_seed(), rand_seed(), r_p,
-                                       varying_size, clusters_test);
+                       var_dust_size, rand_seed(), r_dust, clusters_test,
+                                  rho_dust, PI);
+        distributeParticlesTestSection(x_size, y_size, nbr_particles,
+                                       rho_carbon, PI, rand_seed(), rand_seed(),
+                                       r_p, varying_size, clusters_test);
 
 
 
@@ -233,7 +240,6 @@ int main(){
         std::cout << "t = " << t << std::endl;
         return 0;
     }
-
     if (visualize){
         sf::RenderWindow window(sf::VideoMode(x_size, y_size), "DLCA");
         window.setVerticalSyncEnabled(true);
@@ -453,9 +459,24 @@ int main(){
         }
         return 0;
     }
-    else {
+    else if (proper_simulation){
+        clusters_test.clear();
+        L_0 = findSystemSize(r_p, Cc, PI, dt, L_typical, vel_generations, E_0,
+                             p1, simulation_time, dust_density, carbon_density,
+                             tot_objects);
+        x_size = L_0/L_typical;
+        y_size = x_size;
+        distributeDustTestSection(x_size, y_size, nbr_dust_particles, rand_seed(),
+                       var_dust_size, rand_seed(), r_dust, clusters_test,
+                                  rho_dust, PI);
+        distributeParticlesTestSection(x_size, y_size, nbr_particles,
+                                       rho_carbon, PI, rand_seed(), rand_seed(),
+                                       r_p, varying_size, clusters_test);
+
+        vel_domain = AABB_vel(Point(0, L_0/L_typical), Point(L_0/L_typical,0)); //This means that the velocity field is over the entire domain.
+
+
         for (int i = 0; i < iteration_length; ++i){
-            std::cout << i << std::endl;
             tree.clearQadtree();
             testPutInQuadtree(clusters_test, tree);
             vel_tree.updateEddyTree(t, vel_generations, g, PI, rand_seed(),
@@ -495,6 +516,8 @@ int main(){
                     }
                 }
             }
+            std::cout << "t = " << t << std::endl;
+            t += dt;
         }
     }
     t2=clock();

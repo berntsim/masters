@@ -38,11 +38,12 @@ struct Cluster{
     double radius;
     Point CM;
     velocity vel;
+    double mass;
     Cluster(bool _joined, std::vector<AABB> _areas,
             std::vector<Particle> _particles, int _index, double _radius,
-            velocity _vel, Point _CM):
+            velocity _vel, Point _CM, double _mass):
         joined(_joined), areas(_areas), particles(_particles), index(_index),
-        radius(_radius), vel(_vel), CM(_CM){}
+        radius(_radius), vel(_vel), CM(_CM), mass(_mass){}
 };
 
 class Quadtree{
