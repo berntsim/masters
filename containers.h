@@ -3,10 +3,12 @@
 
 #include <vector>
 #include <iostream>
+#include <random>
+#include <algorithm>
 
 struct Point{
-    float x, y;
-    Point(float _x = 0, float _y = 0) : x(_x), y(_y){}
+    double x, y;
+    Point(double _x = 0, double _y = 0) : x(_x), y(_y){}
 };
 
 struct AABB{
@@ -25,9 +27,9 @@ struct Particle{
 
 };
 
-struct velocity{
+struct Velocity{
     double v, theta;
-    velocity(double _v = 0, double _theta = 0) : v(_v), theta(_theta){}
+    Velocity(double _v = 0, double _theta = 0) : v(_v), theta(_theta){}
 };
 
 struct Cluster{
@@ -36,14 +38,15 @@ struct Cluster{
     std::vector<Particle> particles;
     int index;
     double radius;
+    Velocity vel;
     Point CM;
-    velocity vel;
     double mass;
-    Cluster(bool _joined, std::vector<AABB> _areas,
-            std::vector<Particle> _particles, int _index, double _radius,
-            velocity _vel, Point _CM, double _mass):
+    double lifetime;
+    Cluster(bool _joined, std::vector<AABB> _areas, std::vector<Particle> _particles,
+            int _index, double _radius, Velocity _vel, Point _CM, double _mass,
+            double _lifetime):
         joined(_joined), areas(_areas), particles(_particles), index(_index),
-        radius(_radius), vel(_vel), CM(_CM), mass(_mass){}
+        radius(_radius), vel(_vel), CM(_CM), mass(_mass), lifetime(_lifetime){}
 };
 
 class Quadtree{
@@ -71,7 +74,53 @@ class Quadtree{
 
 };
 
+struct eddy{
+    double E, theta, L;
+    eddy(double _E = 0, double _theta = 0, double _L = 0) :
+        E(_E), theta(_theta), L(_L){}
+};
+
+struct AABB_vel{
+    Point top_left;
+    Point bottom_right;
+    AABB_vel(Point _top_left, Point _bottom_right) : top_left(_top_left),
+             bottom_right(_bottom_right){}
+    bool contains(Point &a) const;
+};
+
+class Quadtree_vel{
+    public:
+        Quadtree_vel* nw;                                                           //Pointer to the Quadtree node for the nw quarter partitioning of the region.
+        Quadtree_vel* ne;                                                           //Similar, only the ne quarter
+        Quadtree_vel* sw;                                                           //Similar, only the sw quarter
+        Quadtree_vel* se;                                                           //Similar, only the se quarter
+        AABB_vel boundary;                                                          //Boundary of the space partitioned in this node.
+//        velocity E;
+        eddy E;
+        int level;
+        double lifetime;
+        double turnovertime;
+        std::vector<double> p;
+
+//------Methods-----------------------------------------------------------------//This is what would usually be public
+        Quadtree_vel();
+        Quadtree_vel(AABB_vel _boundary, eddy E, int _level,
+                     double _lifetime, double _turnovertime,
+                     std::vector<double> _p);
+
+        ~Quadtree_vel();
+
+        void subdivide_vel(std::mt19937 g, std::mt19937::result_type seed,
+                           double PI, int max_lvl, double L_typical);
+        Velocity queryRange_vel(Point p);
+        void clearQuadtree_vel();
+        void updateEddyTree(double time, int max_lvl, std::mt19937 g,
+                            double PI, std::mt19937::result_type seed,
+                            std::vector<double> p_list, double L_typical);
+};
+
 
 
 
 #endif // CONTAINERS_H
+

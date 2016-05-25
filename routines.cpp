@@ -1,7 +1,10 @@
 #include "routines.h"
 #include "containers.h"
 
-double findDistance(Point a, Point b, double x_size, double y_size){
+double findDistance(Point a, Point b, double x_size, double y_size,
+                    double L_typical){
+    x_size = x_size/L_typical;
+    y_size = y_size/L_typical;
     double dx = a.x - b.x;
     if (dx > x_size * 0.5){
         dx = dx - x_size;
@@ -21,52 +24,135 @@ double findDistance(Point a, Point b, double x_size, double y_size){
     return std::sqrt(pow(dx,2) + pow(dy,2));
 }
 
-void distributeParticlesTest(int len, int height, int nbr_particles,
-                            double rho_carbon, double PI,
-                            std::mt19937::result_type seed_x,
-                            std::mt19937::result_type seed_y, double r_p,
-                            bool varying_size, std::map<int, Cluster*> &clust_test){
-    auto coord_x = std::bind(std::uniform_real_distribution<double>(0,len),     //We define a function to generate a random point in the x-dimension on the domain
+
+void distributeParticlesTest(double len, double height, int nbr_particles,
+                             std::vector<Cluster> &clusters,
+                             std::mt19937::result_type seed_x,
+                             std::mt19937::result_type seed_y, double r_p,
+                             bool varying_size, int nbr_dust, double r_dust,
+                             std::map<int, Cluster*> &clust_test, double rho_dust,
+                             double PI, double rho_carbon, double L_typical,
+                             double carbon_system_size, double dust_system_size,
+                             bool visualize, double max_lifetime,
+                             double simulation_time){
+    double min_coord_x_c = len/6.0;
+    double max_coord_x_c = (5.0*len)/6.0;
+    double min_coord_y_c = height/6.0;
+    double max_coord_y_c = (5.0*height)/6.0;
+    double min_coord_x_d = len/6.0;
+    double max_coord_x_d = (5.0*len)/6.0;
+    double min_coord_y_d = height/6.0;
+    double max_coord_y_d = (5.0*height)/6.0;
+    if (!visualize){
+        min_coord_x_c = (len/2.0 - carbon_system_size/2.0);
+        max_coord_x_c = (len/2.0 + carbon_system_size/2.0);
+        min_coord_y_c = (height/2.0 - carbon_system_size/2.0);
+        max_coord_y_c = (height/2.0 + carbon_system_size/2.0);
+        min_coord_x_d = (len/2.0 - dust_system_size/2.0);
+        max_coord_x_d = (len/2.0 + dust_system_size/2.0);
+        min_coord_y_d = (height/2.0 - dust_system_size/2.0);
+        max_coord_y_d = (height/2.0 + dust_system_size/2.0);
+    }
+
+
+    std::cout << "dust x range: " << max_coord_x_d - min_coord_x_d << std::endl;
+    std::cout << "dust y range: " << max_coord_y_d - min_coord_y_d << std::endl;
+    std::cout << "carbon x range: " << max_coord_x_c-min_coord_x_c << std::endl;
+    std::cout << "carbon y range: " << max_coord_y_c-min_coord_y_c << std::endl;
+
+    auto coord_x_d = std::bind(std::uniform_real_distribution<double>(
+                                   min_coord_x_d, max_coord_x_d),
                                std::mt19937(seed_x));
-    auto coord_y = std::bind(std::uniform_real_distribution<double>(0,height),  //similarly for the y-dimension.
+    auto coord_y_d = std::bind(std::uniform_real_distribution<double>(
+                                   min_coord_y_d, max_coord_y_d),
                                std::mt19937(seed_y));
-    auto rand_size = std::bind(std::uniform_real_distribution<float>(1.0,5.0),
+
+
+    auto coord_x = std::bind(std::uniform_real_distribution<double>(
+                                 min_coord_x_c, max_coord_x_c),                 //We define a function to generate a random point in the x-dimension on the domain
+                               std::mt19937(seed_x));
+    auto coord_y = std::bind(std::uniform_real_distribution<double>(
+                                 min_coord_y_c, max_coord_y_c),                 //similarly for the y-dimension.
+                               std::mt19937(seed_y));
+
+
+
+    auto rand_size = std::bind(std::uniform_real_distribution<double>(1.0,5.0),
+                               std::mt19937(seed_x));
+    auto rand_lifetime = std::bind(std::uniform_real_distribution<double>(0,
+                                                                  max_lifetime),
                                std::mt19937(seed_x));
     double dist;
-    int org_size = clust_test.size();
-    int part_placed = clust_test.size();
+    int part_placed = 0;
     Point tmp;
     bool occupied = false;
     std::vector<Particle> tmp_part;
     AABB aabb_tmp = AABB(Point(), Point());
     std::vector<AABB> areas_tmp;
-    velocity vel;
-    double mass = 0;
+    Velocity tmp_vel;
+    double m_dust = rho_dust*PI*(4.0/3.0)*std::pow(r_dust*L_typical, 3.0);
+    double m_carbon = rho_carbon*PI*(4.0/3.0)*std::pow(r_p*L_typical, 3.0);
 
-    while (int(clust_test.size()) < org_size + nbr_particles){
+    while (int(clusters.size()) < nbr_dust){
+        tmp.x = coord_x_d();
+        tmp.y = coord_y_d();
+        if (varying_size){
+            r_p = rand_size();
+        }
+        for (int i = 0; i < int(clusters.size()); ++i){
+            dist = findDistance(clusters[i].particles[0].pos, tmp, len, height,
+                                L_typical);
+            if (clusters[i].particles[0].r_p + r_dust > dist){
+                occupied = true;
+            }
+        }
+        if (!occupied){
+            tmp_part.push_back(Particle(tmp, r_dust));
+            aabb_tmp.bottom_right.x = tmp.x+r_dust;
+            aabb_tmp.bottom_right.y = tmp.y - r_dust;
+            aabb_tmp.top_left.x = tmp.x - r_dust;
+            aabb_tmp.top_left.y = tmp.y + r_dust;
+            areas_tmp.push_back(aabb_tmp);
+            clusters.push_back(Cluster(false, areas_tmp, tmp_part, part_placed,
+                                       r_dust, tmp_vel, tmp, m_dust,
+                                       rand_lifetime()));
+            clust_test.insert(std::make_pair(part_placed, new Cluster(false,
+                                             areas_tmp, tmp_part, part_placed,
+                                             r_dust, tmp_vel, tmp, m_dust,
+                                             rand_lifetime())));
+            part_placed++;
+            tmp_part.clear();
+            areas_tmp.clear();
+        }
+        occupied = false;                                                       //We reset and prepare to place the next particle.
+    }
+    while (int(clusters.size()) < nbr_particles + nbr_dust){
         tmp.x = coord_x();
         tmp.y = coord_y();
         if (varying_size){
             r_p = rand_size();
         }
-        for (int i = 0; i < int(clust_test.size()); ++i){
-            dist = findDistance(clust_test[i]->particles[0].pos, tmp, len, height);
-            if (clust_test[i]->particles[0].r_p + r_p > dist){
+        for (int i = 0; i < int(clusters.size()); ++i){
+            dist = findDistance(clusters[i].particles[0].pos, tmp, len, height,
+                                L_typical);
+            if (clusters[i].particles[0].r_p + r_p > dist){
                 occupied = true;
             }
         }
         if (!occupied){
-            mass = rho_carbon*(4.0/3.0)*PI*std::pow(r_p, 3.0);
             tmp_part.push_back(Particle(tmp, r_p));
             aabb_tmp.bottom_right.x = tmp.x+r_p;
             aabb_tmp.bottom_right.y = tmp.y - r_p;
             aabb_tmp.top_left.x = tmp.x - r_p;
             aabb_tmp.top_left.y = tmp.y + r_p;
             areas_tmp.push_back(aabb_tmp);
-            clust_test.insert(std::make_pair(part_placed,
-                                             new Cluster(false, areas_tmp,
-                                                         tmp_part, part_placed,
-                                                         r_p, vel, tmp, mass)));
+            clusters.push_back(Cluster(false, areas_tmp, tmp_part, part_placed,
+                                       r_p, tmp_vel, tmp, m_carbon,
+                                       simulation_time));
+            clust_test.insert(std::make_pair(part_placed, new Cluster(false,
+                                             areas_tmp, tmp_part, part_placed,
+                                             r_p, tmp_vel, tmp, m_carbon,
+                                             simulation_time)));
             part_placed++;
             tmp_part.clear();
             areas_tmp.clear();
@@ -75,196 +161,6 @@ void distributeParticlesTest(int len, int height, int nbr_particles,
     }
 }
 
-void distributeDust(int len, int height, int nbr_particles,
-                    std::mt19937::result_type seed_x, bool varying_size,
-                    std::mt19937::result_type seed_y, double r_p,
-                    std::map<int, Cluster*> &clusters, double rho_dust,
-                    double PI){
-    auto coord_x = std::bind(std::uniform_real_distribution<double>(0,len),     //We define a function to generate a random point in the x-dimension on the domain
-                               std::mt19937(seed_x));
-    auto coord_y = std::bind(std::uniform_real_distribution<double>(0,height),  //similarly for the y-dimension.
-                               std::mt19937(seed_y));
-    auto rand_size = std::bind(std::uniform_real_distribution<float>(1.0,5.0),
-                               std::mt19937(seed_x));
-    double dist;
-    int container_position = clusters.size();
-    int org_size = container_position;
-    Point tmp;
-    bool occupied = false;
-    std::vector<Particle> tmp_part;
-    AABB aabb_tmp = AABB(Point(), Point());
-    std::vector<AABB> areas_tmp;
-    velocity vel;
-    double mass = 0;
-
-    while (int(clusters.size()) < org_size + nbr_particles){
-        tmp.x = coord_x();
-        tmp.y = coord_y();
-        if (varying_size){
-            r_p = rand_size();
-        }
-        for (int i = 0; i < int(clusters.size()); ++i){
-            dist = findDistance(clusters[i]->particles[0].pos, tmp, len, height);
-            if (clusters[i]->particles[0].r_p + r_p > dist){
-                occupied = true;
-            }
-        }
-        if (!occupied){
-            mass = rho_dust*(4.0/3.0)*PI*std::pow(r_p, 3.0);
-            tmp_part.push_back(Particle(tmp, r_p));
-            aabb_tmp.bottom_right.x = tmp.x+r_p;
-            aabb_tmp.bottom_right.y = tmp.y - r_p;
-            aabb_tmp.top_left.x = tmp.x - r_p;
-            aabb_tmp.top_left.y = tmp.y + r_p;
-            areas_tmp.push_back(aabb_tmp);
-            clusters.insert(std::make_pair(container_position,
-                                             new Cluster(false, areas_tmp,
-                                                         tmp_part,
-                                                         container_position,
-                                                         r_p, vel, tmp, mass)));
-            std::cout << "dust at: " << container_position << std::endl;
-            container_position++;
-            tmp_part.clear();
-            areas_tmp.clear();
-        }
-        occupied = false;                                                       //We reset and prepare to place the next particle.
-    }
-}
-
-void distributeDustTestSection(int len, int height, int nbr_particles,
-                    std::mt19937::result_type seed_x, bool varying_size,
-                    std::mt19937::result_type seed_y, double r_p,
-                    std::map<int, Cluster*> &clusters, double rho_dust,
-                                double PI){
-    auto coord_x = std::bind(std::uniform_real_distribution<double>(len/2.0 - len/4.0, len/2.0 + len/4.0),     //We define a function to generate a random point in the x-dimension on the domain
-                               std::mt19937(seed_x));
-    auto coord_y = std::bind(std::uniform_real_distribution<double>(height/2.0 - height/4.0, height/2.0 + height/4.0),  //similarly for the y-dimension.
-                               std::mt19937(seed_y));
-    auto rand_size = std::bind(std::uniform_real_distribution<float>(1.0,5.0),
-                               std::mt19937(seed_x));
-    double dist;
-    int container_position = clusters.size();
-    int org_size = container_position;
-    Point tmp;
-    bool occupied = false;
-    std::vector<Particle> tmp_part;
-    AABB aabb_tmp = AABB(Point(), Point());
-    std::vector<AABB> areas_tmp;
-    velocity vel;
-    double mass = 0;
-
-    while (int(clusters.size()) < org_size + nbr_particles){
-        tmp.x = coord_x();
-        tmp.y = coord_y();
-        if (varying_size){
-            r_p = rand_size();
-        }
-        for (int i = 0; i < int(clusters.size()); ++i){
-            dist = findDistance(clusters[i]->particles[0].pos, tmp, len, height);
-            if (clusters[i]->particles[0].r_p + r_p > dist){
-                occupied = true;
-            }
-        }
-        if (!occupied){
-            mass = rho_dust*(4.0/3.0)*PI*std::pow(r_p, 3.0);
-            tmp_part.push_back(Particle(tmp, r_p));
-            aabb_tmp.bottom_right.x = tmp.x+r_p;
-            aabb_tmp.bottom_right.y = tmp.y - r_p;
-            aabb_tmp.top_left.x = tmp.x - r_p;
-            aabb_tmp.top_left.y = tmp.y + r_p;
-            areas_tmp.push_back(aabb_tmp);
-            clusters.insert(std::make_pair(container_position,
-                                             new Cluster(false, areas_tmp,
-                                                         tmp_part,
-                                                         container_position,
-                                                         r_p, vel, tmp, mass)));
-            std::cout << "dust at: " << container_position << std::endl;
-            container_position++;
-            tmp_part.clear();
-            areas_tmp.clear();
-        }
-        occupied = false;                                                       //We reset and prepare to place the next particle.
-    }
-}
-
-void distributeParticlesTestSection(int len, int height, int nbr_particles,
-                            double rho_carbon, double PI,
-                            std::mt19937::result_type seed_x,
-                            std::mt19937::result_type seed_y, double r_p,
-                            bool varying_size, std::map<int, Cluster*> &clust_test){
-    auto coord_x = std::bind(std::uniform_real_distribution<double>(len/2.0 - len/4.0, len/2.0 + len/4.0),     //We define a function to generate a random point in the x-dimension on the domain
-                               std::mt19937(seed_x));
-    auto coord_y = std::bind(std::uniform_real_distribution<double>(height/2.0 - height/4.0, height/2.0 + height/4.0),  //similarly for the y-dimension.
-                               std::mt19937(seed_y));
-    auto rand_size = std::bind(std::uniform_real_distribution<float>(1.0,5.0),
-                               std::mt19937(seed_x));
-    double dist;
-    int org_size = clust_test.size();
-    int part_placed = clust_test.size();
-    Point tmp;
-    bool occupied = false;
-    std::vector<Particle> tmp_part;
-    AABB aabb_tmp = AABB(Point(), Point());
-    std::vector<AABB> areas_tmp;
-    velocity vel;
-    double mass = 0;
-
-    while (int(clust_test.size()) < org_size + nbr_particles){
-        tmp.x = coord_x();
-        tmp.y = coord_y();
-        if (varying_size){
-            r_p = rand_size();
-        }
-        for (int i = 0; i < int(clust_test.size()); ++i){
-            dist = findDistance(clust_test[i]->particles[0].pos, tmp, len, height);
-            if (clust_test[i]->particles[0].r_p + r_p > dist){
-                occupied = true;
-            }
-        }
-        if (!occupied){
-            mass = rho_carbon*(4.0/3.0)*PI*std::pow(r_p, 3.0);
-            tmp_part.push_back(Particle(tmp, r_p));
-            aabb_tmp.bottom_right.x = tmp.x+r_p;
-            aabb_tmp.bottom_right.y = tmp.y - r_p;
-            aabb_tmp.top_left.x = tmp.x - r_p;
-            aabb_tmp.top_left.y = tmp.y + r_p;
-            areas_tmp.push_back(aabb_tmp);
-            clust_test.insert(std::make_pair(part_placed,
-                                             new Cluster(false, areas_tmp,
-                                                         tmp_part, part_placed,
-                                                         r_p, vel, tmp, mass)));
-            part_placed++;
-            tmp_part.clear();
-            areas_tmp.clear();
-        }
-        occupied = false;                                                       //We reset and prepare to place the next particle.
-    }
-}
-
-void addToDraw(std::vector<sf::CircleShape> &to_draw,
-               std::vector<Cluster> clusters,
-               sf::Color fill_color){
-    sf::CircleShape shape(1.0);
-    for (auto&& clust: clusters){
-        for (auto&& particle: clust.particles){
-            shape.setRadius(particle.r_p);
-            shape.setPosition(particle.pos.x - particle.r_p,
-                              particle.pos.y - particle.r_p);
-            shape.setFillColor(fill_color);
-            to_draw.push_back(shape);
-        }
-    }
-}
-
-sf::VertexArray printSearchRange(AABB range){
-    sf::VertexArray lines(sf::LinesStrip, 5);
-    lines[0].position = sf::Vector2f(range.top_left.x, range.top_left.y);
-    lines[1].position = sf::Vector2f(range.bottom_right.x, range.top_left.y);
-    lines[2].position = sf::Vector2f(range.bottom_right.x,range.bottom_right.y);
-    lines[3].position = sf::Vector2f(range.top_left.x, range.bottom_right.y);
-    lines[4].position = sf::Vector2f(range.top_left.x, range.top_left.y);
-    return lines;
-}
 
 void testPutInQuadtree(std::map<int, Cluster*> clusters, Quadtree &qtree){
     typedef std::map<int, Cluster*>::iterator it_type;
@@ -275,23 +171,31 @@ void testPutInQuadtree(std::map<int, Cluster*> clusters, Quadtree &qtree){
     }
 }
 
-void takeSingleStep(double step_dir, double len, Cluster* cluster, int x_size,
-                    int y_size){
+void takeSingleStep(double step_dir, double len, Cluster* cluster, double x_size,
+                    double y_size){
     if (cluster != nullptr){
         for (auto&& particle: cluster->particles){
             particle.pos.x += len*std::cos(step_dir);
             particle.pos.y += len*std::sin(step_dir);
             if (particle.pos.x < 0){
                 particle.pos.x += x_size;
+                std::cout << "pos = " << particle.pos.x << std::endl;
+                std::cout << "We have a problem 1" << std::endl;
             }
             else if (particle.pos.x >= x_size){
                 particle.pos.x -= x_size;
+                std::cout << "pos = " << particle.pos.x << std::endl;
+                std::cout << "We have a problem 2" << std::endl;
             }
             if (particle.pos.y < 0){
                 particle.pos.y += y_size;
+                std::cout << "pos = " << particle.pos.y << std::endl;
+                std::cout << "We have a problem 3" << std::endl;
             }
             else if (particle.pos.y >= y_size){
                 particle.pos.y -= y_size;
+                std::cout << "pos = " << particle.pos.y << std::endl;
+                std::cout << "We have a problem 4" << std::endl;
             }
         }
         for (auto&& area:cluster->areas){
@@ -327,31 +231,9 @@ void takeSingleStep(double step_dir, double len, Cluster* cluster, int x_size,
     }
 }
 
-std::vector<Cluster> BPcolCheck(Cluster* cluster,
-                                std::vector<AABB> search_ranges,
-                                Quadtree &tree){
-    std::vector<Cluster> ret_vec;
-//    if (cluster != nullptr){
-        std::vector<Cluster> tmp_res;
-        int index = cluster->index;
-        for (auto&& search_range:search_ranges){
-            tmp_res = tree.queryRange(search_range);
-//            if (tmp_res.size() > 1){
-                for (auto&& res: tmp_res){
-//                    if (res.index != index){
-                        ret_vec.push_back(res);
-//                    }
-//                }
-//            }
-        }
-    }
-    return ret_vec;
-}
-
 double LHit(double step_L, double step_dir, Particle one, Particle two,
-            int x_size, int y_size){
+            double x_size, double y_size){
     //rewrite the check to take findDistance into account!
-    step_L += 0.001;
     double dx = one.pos.x - two.pos.x;
     if (dx > x_size * 0.5){
         dx = dx - x_size;
@@ -361,22 +243,18 @@ double LHit(double step_L, double step_dir, Particle one, Particle two,
     }
 
     double dy = one.pos.y - two.pos.y;
+
     if (dy > y_size * 0.5){
         dy = dy - y_size;
     }
     else if (dy <= -y_size * 0.5){
         dy = dy + y_size;
     }
-
-//    double distance = std::sqrt(dx*dx + dy*dy) - one.r_p - two.r_p;
-//    if (distance < step_L){
-//        return distance;
-//    }
-//    else {
-//        return step_L;
-//    }
-
-
+//    std::cout << std::endl;
+//    std::cout << "pos one = " << one.pos.x << "," << one.pos.y << std::endl;
+//    std::cout << "pos two = " << two.pos.x << "," << two.pos.y << std::endl;
+//    std::cout << "dx = " << dx << ", dy = " << dy << std::endl;
+//    std::cout << "step_dir = " << step_dir << std::endl;
     double d_p = one.r_p + two.r_p;
     double a = 1.0;
     double b = 2.0*(std::cos(step_dir)*(dx) +
@@ -385,13 +263,21 @@ double LHit(double step_L, double step_dir, Particle one, Particle two,
                (-dy)*(-dy) - d_p*d_p;
     double res[2];
     bool sol = true;
+//    std::cout << 2*std::sin(-3.1415926535/2.0)*dy << std::endl;
+//    std::cout << "a = " << a << std::endl;
+//    std::cout << "b = " << b << std::endl;
+//    std::cout << "c = " << c << std::endl;
+//    std::cout << "d_p = " << d_p << std::endl;
     if ((b*b - 4*a*c) < 0){
+//        std::cout << "False solution" << std::endl;
         sol = false;
         return step_L;
     }
     else {
         res[0] = (-b + sqrt(b*b - 4.0*a*c))/(2.0*a);
         res[1] = (-b - sqrt(b*b - 4.0*a*c))/(2.0*a);
+//        std::cout << "res[0] = " << res[0] << std::endl;
+//        std::cout << "res[1] = " << res[1] << std::endl;
         if ((res[0] < res[1]) && ((res[0] > 0) && (res[0] < step_L))){
             return res[0];
         }
@@ -404,128 +290,63 @@ double LHit(double step_L, double step_dir, Particle one, Particle two,
     }
 }
 
-double NPColCheckOrg(Cluster* cluster, std::vector<Cluster> targets,
+
+double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
                   double step_len, double step_dir, int &col_with,
-                  int x_size, int y_size){
+                  double x_size, double y_size,
+                  std::map<int, Cluster*> &clust_test){
     double tmp;
     double ret_val = step_len;
     if (cluster != nullptr){
-        for (auto&& target:targets){
-            if (target.index != cluster->index){
-                for (auto&& particle:cluster->particles){
-                    for (auto&& tar_part: target.particles){
-                        tmp = LHit(step_len, step_dir, particle, tar_part,
-                                   x_size, y_size);
-                        if (tmp < ret_val){
-                            ret_val = tmp;
-                            col_with = target.index;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return ret_val;                                                             //Returns the correct step length
-}
-
-
-double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
-                  double &step_len, double step_dir, int &col_with,
-                  int x_size, int y_size, Quadtree_vel &vel_tree, double dt,
-                  double L_typical, double rho_air, double rho_dust,
-                  double C_sphere, double PI, bool &will_collide){
-    double tmp;
-    double ret_val;
-    double sx = 0, sy = 0;
-    if (cluster != nullptr){
-        will_collide = false;
-        ret_val = step_len;
         for (auto&& target : targets){
-            if (target.index != cluster->index){
-                for (auto&& particle: cluster->particles){
-                    for (auto&& tar_part: target.particles){
-                        tmp = LHit(step_len, step_dir, particle, tar_part,
-                                   x_size, y_size);
-                        if (std::abs(tmp - ret_val) < 0.00001){
-                            will_collide = true;
-                            col_with = target.index;
-                        }
-                        if (tmp < ret_val){
-                            ret_val = tmp;
-                            col_with = target.index;
+            if (clust_test.at(target.index) != nullptr){
+                target = *clust_test.at(target.index);
+                if (target.index != cluster->index){
+                    for (auto&& particle: cluster->particles){
+                        for (auto&& tar_part: target.particles){
+                            tmp = LHit(step_len, step_dir, particle, tar_part, x_size,
+                                       y_size);
+                            if (tmp <= ret_val){
+                                ret_val = tmp;
+                                col_with = target.index;
+                            }
                         }
                     }
                 }
             }
         }
     }
-    return ret_val;                                                             //Returns the correct step length
+    return ret_val;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-void testAddToDrawRec(std::vector<sf::RectangleShape> &to_draw,
-                      std::map<int, Cluster*> clusters,
-                      sf::Color fill_color){
-    typedef std::map<int, Cluster*>::iterator it_type;
-    for(it_type iterator = clusters.begin(); iterator != clusters.end(); iterator++){
-        sf::RectangleShape shape(sf::Vector2f((iterator->second->areas[0].bottom_right.x - iterator->second->areas[0].top_left.x),
-                                              (iterator->second->areas[0].top_left.y - iterator->second->areas[0].bottom_right.y)));
-        shape.setPosition(iterator->second->areas[0].top_left.x, iterator->second->areas[0].top_left.y-(iterator->second->areas[0].top_left.y - iterator->second->areas[0].bottom_right.y));
-        shape.setFillColor(fill_color);
-        to_draw.push_back(shape);
-    }
-}
-
-void testAddToDraw(std::vector<sf::CircleShape> &to_draw,
-               std::map<int, Cluster*> clusters,
-               sf::Color fill_color){
-    sf::CircleShape shape(1.0);
-    typedef std::map<int, Cluster*>::iterator it_type;
-    for(it_type iterator = clusters.begin(); iterator != clusters.end();
-        iterator++){
-        if (iterator->second != nullptr){
-            for (auto&& particle: iterator->second->particles){
-                shape.setRadius(particle.r_p);
-                shape.setPosition(particle.pos.x - particle.r_p,
-                                  particle.pos.y - particle.r_p);
-                shape.setFillColor(fill_color);
-                to_draw.push_back(shape);
-            }
-        }
-    }
-}
 
 void TestJoinClusters(Cluster* clust, Cluster* other,
-                      std::map<int, Cluster*> &clusters, int x_size,
-                      int y_size, double rho_carbon, double rho_dust,
-                      double r_dust, double r_carbon, double PI,
+                      std::map<int, Cluster*> &clusters, double x_size,
+                      double y_size, double PI, double rho_carbon,
+                      double rho_dust, double r_dust, double r_carbon,
                       double L_typical){
     if ((clust != nullptr) && (other != nullptr)){
         if (clust->index != other->index){
-            int org_size = clust->particles.size();
-            updateAreas(clust, other, x_size, y_size);
+//            if (other->index >= 10500){
+//                std::cout << other->index << std::endl;
+//                std::cout << "a dust particle with index > 10500 has collided" << std::endl;
+//            }
+            updateAreas(clust, other);
             consMomentum(clust, *other, PI);
+            clust->mass += other->mass;
             clust->particles.insert(clust->particles.end(),
                                     other->particles.begin(),
                                     other->particles.end());
             clust->CM = FindCM(*clust, rho_carbon, rho_dust, r_dust, r_carbon,
-                   PI, L_typical);
+                               PI, L_typical);
+            clust->lifetime = std::min(clust->lifetime, other->lifetime);
             double diameter = 0;
             for (int i = 0; i < int(clust->particles.size()); ++i){
                 for (int j = i+1; j < int(clust->particles.size()); ++j){
                     double tmp_diameter = findDistance(clust->particles[i].pos,
                                                        clust->particles[j].pos,
-                                                       x_size, y_size) +
+                                                       x_size, y_size,
+                                                       L_typical) +
                                           clust->particles[i].r_p +
                                           clust->particles[j].r_p;
                     if (tmp_diameter> diameter){
@@ -534,22 +355,11 @@ void TestJoinClusters(Cluster* clust, Cluster* other,
                 }
             }
             clust->radius = diameter/2.0;
-            if (clust->particles.size() != org_size + other->particles.size()){
-                std::cout << "size missmatch for particles" << std::endl;
-            }
             clusters.at(other->index) = nullptr;
         }
     }
 }
 
-void printInformation(Cluster* clust, int col_with){
-    for (auto&& particle:clust->particles){
-        std::cout << particle.pos.x << ", " << particle.pos.y << "      " << clust->index << "   ";
-        std::cout << clust->areas[0].top_left.x << ", " << clust->areas[0].top_left.y << "      ";
-        std::cout << clust->areas[0].bottom_right.x << ", " << clust->areas[0].bottom_right.y << "      "
-                  << col_with << std::endl;
-    }
-}
 
 bool crossXBound(Cluster clust, int x_size){
     if (clust.areas.size() == 1){
@@ -641,226 +451,6 @@ bool crossYBound(Cluster clust, int y_size){
     }
 }
 
-void splitAreas(Cluster &clust, int x_size, int y_size){
-    if ((crossXBound(clust, x_size)) && !(crossYBound(clust, y_size))){         //The area spanned by the cluster only crosses the x-boundary
-        AABB zero(Point(0,0), Point(0,0));
-        AABB one(Point(0,0), Point(0,0));
-        if (clust.areas.size() == 1){
-            zero.top_left = clust.areas[0].top_left;
-            zero.bottom_right.x = x_size;
-            zero.bottom_right.y = clust.areas[0].bottom_right.y;
-            one.top_left.x = 0;
-            one.top_left.y = clust.areas[0].top_left.y;
-            one.bottom_right = clust.areas[0].bottom_right;
-            clust.areas.clear();
-            clust.areas.push_back(zero);
-            clust.areas.push_back(one);
-        }
-        else if (clust.areas.size() == 2){
-            if (clust.areas[0].top_left.y == clust.areas[1].top_left.y){
-                zero.top_left = clust.areas[0].top_left;
-                zero.bottom_right.x = x_size;
-                zero.bottom_right.y = clust.areas[0].bottom_right.y;
-                one.top_left.x = 0;
-                one.top_left.y = clust.areas[0].top_left.y;
-                one.bottom_right = clust.areas[1].bottom_right;
-                clust.areas.clear();
-                clust.areas.push_back(zero);
-                clust.areas.push_back(one);
-            }
-            else {
-                zero.top_left = clust.areas[0].top_left;
-                zero.bottom_right.x = x_size;
-                zero.bottom_right.y = clust.areas[1].bottom_right.y;
-                one.top_left.x = 0;
-                one.top_left.y = clust.areas[0].top_left.y;
-                one.bottom_right = clust.areas[1].bottom_right;
-                clust.areas.clear();
-                clust.areas.push_back(zero);
-                clust.areas.push_back(one);
-            }
-        }
-        else if (clust.areas.size() == 4) {
-            zero.top_left = clust.areas[0].top_left;
-            zero.bottom_right.x = x_size;
-            zero.bottom_right.y = clust.areas[3].bottom_right.y;
-            one.top_left.x = 0;
-            one.top_left.y = clust.areas[1].top_left.y;
-            one.bottom_right = clust.areas[2].bottom_right;
-            clust.areas.clear();
-            clust.areas.push_back(zero);
-            clust.areas.push_back(one);
-        }
-    }
-    else if ((crossYBound(clust, y_size)) && !(crossXBound(clust, x_size))){    //The area spanned by the cluster only crosses the y-boundary.
-        AABB zero(Point(0,0), Point(0,0));
-        AABB one(Point(0,0), Point(0,0));
-        if (clust.areas.size() == 1){
-            zero.top_left = clust.areas[0].top_left;
-            zero.bottom_right.x = clust.areas[0].bottom_right.x;
-            zero.bottom_right.y = 0;
-            one.top_left.y = y_size;
-            one.top_left.x = clust.areas[0].top_left.x;
-            one.bottom_right = clust.areas[0].bottom_right;
-            clust.areas.clear();
-            clust.areas.push_back(zero);
-            clust.areas.push_back(one);
-        }
-        else if (clust.areas.size() == 2){
-            if (clust.areas[0].top_left.y == clust.areas[1].top_left.y){
-                zero.top_left = clust.areas[0].top_left;
-                zero.bottom_right.y = 0;
-                zero.bottom_right.x = clust.areas[1].bottom_right.x;
-                one.top_left.x = clust.areas[0].top_left.x;
-                one.top_left.y = y_size;
-                one.bottom_right = clust.areas[1].bottom_right;
-                clust.areas.clear();
-                clust.areas.push_back(zero);
-                clust.areas.push_back(one);
-            }
-            else {
-                zero.top_left = clust.areas[0].top_left;
-                zero.bottom_right.x = clust.areas[0].bottom_right.x;
-                zero.bottom_right.y = 0;
-                one.top_left.y = y_size;
-                one.top_left.x = clust.areas[0].top_left.x;
-                one.bottom_right = clust.areas[1].bottom_right;
-                clust.areas.clear();
-                clust.areas.push_back(zero);
-                clust.areas.push_back(one);
-            }
-        }
-        else if (clust.areas.size() == 4) {
-            zero.top_left = clust.areas[0].top_left;
-            zero.bottom_right.x = clust.areas[1].bottom_right.x;
-            zero.bottom_right.y = 0;
-            one.top_left.y = y_size;
-            one.top_left.x = clust.areas[3].top_left.x;
-            one.bottom_right = clust.areas[2].bottom_right;
-            clust.areas.clear();
-            clust.areas.push_back(zero);
-            clust.areas.push_back(one);
-        }
-    }
-    else if ((crossXBound(clust, x_size) && (crossYBound(clust, y_size)))){
-        AABB zero(Point(0,0), Point(0,0));
-        AABB one(Point(0,0), Point(0,0));
-        AABB two(Point(0,0), Point(0,0));
-        AABB three(Point(0,0), Point(0,0));
-        if (clust.areas.size() == 1){
-            zero.top_left = clust.areas[0].top_left;
-            zero.bottom_right.x = x_size;
-            zero.bottom_right.y = 0;
-            one.top_left.x = 0;
-            one.top_left.y = clust.areas[0].top_left.y;
-            one.bottom_right.x = clust.areas[0].bottom_right.x;
-            one.bottom_right.y = 0;
-            two.top_left.x = 0;
-            two.top_left.y = y_size;
-            two.bottom_right = clust.areas[0].bottom_right;
-            three.top_left.x = clust.areas[0].top_left.x;
-            three.top_left.y = y_size;
-            three.bottom_right.x = x_size;
-            three.bottom_right.y = clust.areas[0].bottom_right.y;
-            clust.areas.clear();
-            clust.areas.push_back(zero);
-            clust.areas.push_back(one);
-            clust.areas.push_back(two);
-            clust.areas.push_back(three);
-        }
-        else if (clust.areas.size() == 2){
-            if (clust.areas[0].top_left.y == clust.areas[1].top_left.y){        //the areas comming in are split vertically
-                zero.top_left = clust.areas[0].top_left;
-                zero.bottom_right.x = x_size;
-                zero.bottom_right.y = 0;
-                one.top_left.x = 0;
-                one.top_left.y = clust.areas[1].top_left.y;
-                one.bottom_right.x = clust.areas[1].bottom_right.x;
-                one.bottom_right.y = 0;
-                two.top_left.x = 0;
-                two.top_left.y = y_size;
-                two.bottom_right = clust.areas[1].bottom_right;
-                three.top_left.x = clust.areas[0].top_left.x;
-                three.top_left.y = y_size;
-                three.bottom_right.x = x_size;
-                three.bottom_right.y = clust.areas[0].bottom_right.y;
-                clust.areas.clear();
-                clust.areas.push_back(zero);
-                clust.areas.push_back(one);
-                clust.areas.push_back(two);
-                clust.areas.push_back(three);
-            }
-            else {                                                              //split horizontally
-                zero.top_left = clust.areas[0].top_left;
-                zero.bottom_right.x = x_size;
-                zero.bottom_right.y = 0;
-                one.top_left.x = 0;
-                one.top_left.y = clust.areas[0].top_left.y;
-                one.bottom_right.x = clust.areas[0].bottom_right.x;
-                one.bottom_right.y = 0;
-                two.top_left.x = 0;
-                two.top_left.y = y_size;
-                two.bottom_right.x = clust.areas[0].bottom_right.x;
-                two.bottom_right.y = clust.areas[1].bottom_right.y;
-                three.top_left.x = clust.areas[1].top_left.x;
-                three.top_left.y = y_size;
-                three.bottom_right.x = x_size;
-                three.bottom_right.y = clust.areas[1].bottom_right.y;
-                clust.areas.clear();
-                clust.areas.push_back(zero);
-                clust.areas.push_back(one);
-                clust.areas.push_back(two);
-                clust.areas.push_back(three);
-            }
-        }
-        else if (clust.areas.size() == 4){
-            zero.top_left = clust.areas[0].top_left;
-            zero.bottom_right.x = x_size;
-            zero.bottom_right.y = 0;
-            one.top_left.x = 0;
-            one.top_left.y = clust.areas[1].top_left.y;
-            one.bottom_right.x = clust.areas[1].bottom_right.x;
-            one.bottom_right.y = 0;
-            two.top_left.x = 0;
-            two.top_left.y = y_size;
-            two.bottom_right.x = clust.areas[2].bottom_right.x;
-            two.bottom_right.y = clust.areas[2].bottom_right.y;
-            three.top_left.x = clust.areas[3].top_left.x;
-            three.top_left.y = y_size;
-            three.bottom_right.x = x_size;
-            three.bottom_right.y = clust.areas[3].bottom_right.y;
-            clust.areas.clear();
-            clust.areas.push_back(zero);
-            clust.areas.push_back(one);
-            clust.areas.push_back(two);
-            clust.areas.push_back(three);
-        }
-    }
-    else {
-        if (clust.areas.size() == 1){
-            AABB zero(Point(0,0), Point(0,0));
-            zero.top_left = clust.areas[0].top_left;
-            zero.bottom_right = clust.areas[0].bottom_right;
-            clust.areas.clear();
-            clust.areas.push_back(zero);
-        }
-        else if (clust.areas.size() == 2){
-            AABB zero(Point(0,0), Point(0,0));
-            zero.top_left = clust.areas[0].top_left;
-            zero.bottom_right = clust.areas[1].bottom_right;
-            clust.areas.clear();
-            clust.areas.push_back(zero);
-        }
-        else if (clust.areas.size() == 4){
-            AABB zero(Point(0,0), Point(0,0));
-            zero.top_left = clust.areas[0].top_left;
-            zero.bottom_right = clust.areas[2].bottom_right;
-            clust.areas.clear();
-            clust.areas.push_back(zero);
-        }
-    }
-}
-
 AABB testFindSearchRange(AABB area, double step_len){
     AABB range = AABB(Point(0,0), Point(0,0));
     range.top_left.x = area.top_left.x - step_len;
@@ -885,6 +475,7 @@ std::vector<Cluster> testBPcolCheck(AABB search_range, Quadtree &tree){
     }
 }
 
+
 int nbrAreasOut(Cluster* clust, Cluster* other, int x_size, int y_size){
     if ((clust != nullptr) && (other != nullptr)){
         if ((crossXBound(*clust, x_size)) && (crossYBound(*other, y_size))){
@@ -905,382 +496,7 @@ int nbrAreasOut(Cluster* clust, Cluster* other, int x_size, int y_size){
     }
 }
 
-bool otherLeftTwo(Cluster* clust, Cluster* other){
-    if (clust->areas[1].bottom_right.x > other->areas[0].top_left.x) {
-        return true;
-    }
-    else {
-        return false;
-    }
-}
-
-bool testOtherLeft(Cluster* other, int x_size){
-    if (other->areas.size() == 1){
-        if ((other->areas[0].top_left.x < x_size/2.0) ||
-            (other->areas[0].bottom_right.x < x_size/2.0)){
-//            std::cout << "other->areas[0].top_left.x = " << (other->areas[0].top_left.x) << std::endl;
-//            std::cout << " x_size/2.0 = " <<  x_size/2.0 << std::endl;
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-bool testOtherRight(Cluster* other, int x_size){
-    if (other->areas.size() == 1){
-        if ((other->areas[0].top_left.x > x_size/2.0) ||
-            (other->areas[0].bottom_right.x > x_size/2.0)){
-//            std::cout << "other->areas[0].top_left.x = " << (other->areas[0].top_left.x) << std::endl;
-//            std::cout << " x_size/2.0 = " <<  x_size/2.0 << std::endl;
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-bool testClustLeft(Cluster* clust, int x_size){
-//    std::cout << "clust->areas[0].top_left.x = " << (clust->areas[0].top_left.x) << std::endl;
-//    std::cout << "clust->areas[0].bottom_right.x = " << (clust->areas[0].bottom_right.x) << std::endl;
-//    std::cout << " x_size/2.0 = " <<  x_size/2.0 << std::endl;
-    if (clust->areas.size() == 1){
-        if ((clust->areas[0].top_left.x < x_size/2.0) ||
-            (clust->areas[0].bottom_right.x < x_size/2.0)){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else if (clust->areas.size() == 2){
-        if ((clust->areas[0].top_left.x < x_size/2.0) ||
-            (clust->areas[0].bottom_right.x < x_size/2.0)){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-bool testClustRight(Cluster* clust, int x_size){
-    if (clust->areas.size() == 1){
-        if (clust->areas[0].top_left.x > x_size/2.0){
-            return true;
-        }
-        else if (clust->areas[0].bottom_right.x > x_size/2.0){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else if (clust->areas.size() == 2){
-        if (clust->areas[0].top_left.x > x_size/2.0){
-            return true;
-        }
-        else if (clust->areas[0].bottom_right.x > x_size/2.0){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-bool testClustUp(Cluster* clust, int y_size){
-    if (clust->areas.size() == 1){
-        if (clust->areas[0].top_left.y > y_size/2.0){
-            return true;
-        }
-        else if (clust->areas[0].bottom_right.y > y_size/2.0){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else if (clust->areas.size() == 2){
-        if (clust->areas[0].top_left.y > y_size/2.0){
-            return true;
-        }
-        else if (clust->areas[0].bottom_right.y > y_size/2.0){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-bool testClustDown(Cluster* clust, int y_size){
-    if (clust->areas.size() == 1){
-        if (clust->areas[0].top_left.y < y_size/2.0){
-            return true;
-        }
-        else if (clust->areas[0].bottom_right.y < y_size/2.0){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else if (clust->areas.size() == 2) {
-        if (clust->areas[0].top_left.y < y_size/2.0){
-            return true;
-        }
-        else if (clust->areas[0].bottom_right.y < y_size/2.0){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-bool clustLeftTwo(Cluster* clust, Cluster* other){
-    if (clust->areas[0].top_left.x < other->areas[1].bottom_right.x){
-        return true;
-    }
-    else {
-        return false;
-    }
-}
-
-bool otherRightTwo(Cluster* clust, Cluster* other){
-    if (clust->areas[1].top_left.x > other->areas[0].top_left.x){
-        return true;
-    }
-    else {
-        return false;
-    }
-}
-
-bool clustRightTwo(Cluster* clust, Cluster* other){
-    if (other->areas[0].top_left.x < clust->areas[0].bottom_right.x){
-        return true;
-    }
-    else {
-        return false;
-    }
-}
-
-bool otherUpTwo(Cluster* clust, Cluster* other){
-    if (other->areas[0].top_left.y > clust->areas[1].bottom_right.y){
-        return true;
-    }
-    else {
-        return false;
-    }
-}
-
-bool otherDownTwo(Cluster* clust, Cluster* other){
-    if (clust->areas[0].top_left.y < other->areas[0].bottom_right.y){
-        return true;
-    }
-    else {
-        return false;
-    }
-}
-
-bool otherLeftFour(Cluster* clust, Cluster* other){
-    if (clust->areas.size() == 4){
-        if (other->areas.size() == 1){
-            if (other->areas[0].top_left.x - clust->areas[1].bottom_right.x < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-        else if (other->areas.size() == 2){
-            if (other->areas[0].top_left.x - clust->areas[1].bottom_right.x < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-    }
-    else if (other->areas.size() == 4){
-        if (clust->areas.size() == 1){
-            if (clust->areas[0].top_left.x - other->areas[1].bottom_right.x < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-        else if (clust->areas.size() == 2){
-            if (clust->areas[0].top_left.x - other->areas[1].bottom_right.x < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-    }
-    return false;
-}
-
-bool otherRightFour(Cluster* clust, Cluster* other){
-    if (clust->areas.size() == 4){
-        if (other->areas.size() == 1){
-            if (clust->areas[0].top_left.x - other->areas[0].bottom_right.x < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-        else if (other->areas.size() == 2){
-            if (clust->areas[0].top_left.x - other->areas[0].bottom_right.x < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-    }
-    else if (other->areas.size() == 4){
-        if (clust->areas.size() == 1){
-            if (other->areas[0].top_left.x - clust->areas[0].bottom_right.x < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-        else if (clust->areas.size() == 2){
-            if (clust->areas[0].top_left.x - other->areas[0].bottom_right.x < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-    }
-    return false;
-}
-
-bool otherDownFour(Cluster* clust, Cluster* other){
-    if (clust->areas.size() == 4){
-        if (other->areas.size() == 1){
-            if (other->areas[0].bottom_right.y - clust->areas[1].top_left.y < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-        else if (other->areas.size() == 2){
-            //Write this when done with the simple cases.
-        }
-    }
-    else if (other->areas.size() == 4){
-        if (clust->areas.size() == 1){
-            if (clust->areas[0].bottom_right.y - other->areas[1].top_left.y < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-            //Write this when done with the simple cases.
-        }
-        else if (clust->areas.size() == 2){
-
-        }
-    }
-    return false;
-
-}
-
-bool otherUpFour(Cluster* clust, Cluster* other){
-    if (clust->areas.size() == 4){
-        if (other->areas.size() == 1){
-            if (clust->areas[2].bottom_right.y - other->areas[0].top_left.y < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-        else if (other->areas.size() == 2){
-            //Write this when done with the simple cases.
-        }
-    }
-    else if (other->areas.size() == 4){
-        if (clust->areas.size() == 1){
-            if (other->areas[2].bottom_right.y - clust->areas[0].top_left.y < 0.1){
-                return true;
-            }
-            else {
-                return false;
-            }
-            //Write this when done with the simple cases.
-        }
-        else if (clust->areas.size() == 2){
-
-        }
-    }
-    return false;
-
-}
-
-void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
-    if (nbrAreasOut(clust, other, x_size, y_size) == 3){
-        std::cout << "hi" << std::endl;
-        std::cout << "clust areas size: " << clust->areas.size() << std::endl;
-        std::cout << "other areas size: " << other->areas.size() << std::endl;
-    }
-//    std::cout << clust->index << " has collided with " << other->index << std::endl;
-//    std::cout << "clust coord: " << clust->particles[0].pos.x << "," << clust->particles[0].pos.y << std::endl;
-//    std::cout << "other coord: " << other->particles[0].pos.x << "," << other->particles[0].pos.y << std::endl;
-
-//    std::cout << "clust[0] tlx = " << clust->areas[0].top_left.x << std::endl;
-//    std::cout << "clust[0] brx = " << clust->areas[0].bottom_right.x << std::endl;
-//    std::cout << "other[0] tlx = " << other->areas[0].top_left.x << std::endl;
-//    std::cout << "other[0] brx = " << other->areas[0].bottom_right.x << std::endl;
-
-
-//    std::cout << "nbr areas out = " << nbrAreasOut(clust, other, x_size, y_size) << std::endl;
-//    std::cout << "does the cluster we focus on cross the x-boundary? " << crossXBound(*clust, x_size) << std::endl;
-//    std::cout << "does the target cross the x-boundary? " << crossXBound(*other, x_size) << std::endl;
-//    std::cout << "does the cluster we focus on cross the y-boundary? " << crossYBound(*clust, x_size) << std::endl;
-//    std::cout << "does the target cross the y-boundary? " << crossYBound(*other, x_size) << std::endl;
-//    if (nbrAreasOut(clust, other, x_size, y_size) == 2){
-//        std::cout << "is the target on the left side of the domain? " << testOtherLeft(other, x_size) << std::endl;
-//        std::cout << "is the target on the right side of the domain? " << testOtherRight(other, x_size) << std::endl;
-//        std::cout << "is the cluster on the left side of the domain? " << testClustLeft(clust, x_size) << std::endl;
-//        std::cout << "is the cluster on the right side of the domain? " << testClustRight(clust, x_size) << std::endl;
-//        std::cout << "is the target on the top side of the domain? " << testClustUp(other, y_size) << std::endl;
-//        std::cout << "is the cluster on the top side of the domain? " <<testClustUp(clust, y_size) << std::endl;
-//    }
-//    std::cout << std::endl;
-
-
-    if (nbrAreasOut(clust, other, x_size, y_size) == 1){
+void updateAreas(Cluster* clust, Cluster* other){
         clust->areas[0].top_left.x = std::min(clust->areas[0].top_left.x,
                                               other->areas[0].top_left.x);
         clust->areas[0].top_left.y = std::max(clust->areas[0].top_left.y,
@@ -1290,661 +506,32 @@ void updateAreas(Cluster* clust, Cluster* other, int x_size, int y_size){
         clust->areas[0].bottom_right.y=std::min(clust->areas[0].bottom_right.y,
                                                 other->areas[0].bottom_right.y);
         return;
-    }
-    else if (nbrAreasOut(clust, other, x_size, y_size) == 2){
-        if (crossXBound(*clust, x_size)){
-            if (crossXBound(*other, x_size)){                                    //This checks 3) from the notes, where both rectangles crosses the boundary
-                clust->areas[0].top_left.x = std::min(clust->areas[0].top_left.x,
-                                                      other->areas[0].top_left.x);
-                clust->areas[0].top_left.y = std::max(clust->areas[0].top_left.y,
-                                                      other->areas[0].top_left.y);
-                clust->areas[0].bottom_right.x = x_size;
-                clust->areas[0].bottom_right.y = std::min(clust->areas[0].bottom_right.y,
-                                                          other->areas[0].bottom_right.y);
-
-                clust->areas[1].top_left.x = 0;
-                clust->areas[1].top_left.y = std::max(clust->areas[1].top_left.y,
-                                                      other->areas[1].top_left.y);
-                clust->areas[1].bottom_right.x=std::max(clust->areas[1].bottom_right.x,
-                                                        other->areas[1].bottom_right.x);
-                clust->areas[1].bottom_right.y = clust->areas[0].bottom_right.y;
-                return;
-            }
-            else if (testOtherRight(other, x_size)){                              //This checks 1) from the notes
-                clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
-                                                    other->areas[0].top_left.x);
-                clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
-                                                    other->areas[0].top_left.y);
-                clust->areas[0].bottom_right.x = x_size;
-                clust->areas[0].bottom_right.y =
-                        std::min(clust->areas[1].bottom_right.y,
-                                 other->areas[0].bottom_right.y);
-                clust->areas[1].top_left.x = 0;
-                clust->areas[1].top_left.y=std::max(clust->areas[1].top_left.y,
-                                                    other->areas[0].top_left.y);
-                clust->areas[1].bottom_right.x = clust->areas[1].bottom_right.x;
-                clust->areas[1].bottom_right.y =
-                        std::min(clust->areas[1].bottom_right.y,
-                                 other->areas[0].bottom_right.y);
-                return;
-            }
-            else if (testOtherLeft(other, x_size)){                               //This checks 2) from the notes
-                clust->areas[0].top_left.x = clust->areas[0].top_left.x;
-                clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
-                                                    other->areas[0].top_left.y);
-                clust->areas[0].bottom_right.x = x_size;
-                clust->areas[0].bottom_right.y =
-                        std::min(clust->areas[0].bottom_right.y,
-                                 other->areas[0].bottom_right.y);
-                clust->areas[1].top_left.x = 0;
-                clust->areas[1].top_left.y=std::max(clust->areas[1].top_left.y,
-                                                    other->areas[0].top_left.y);
-                clust->areas[1].bottom_right.x =
-                        std::max(clust->areas[1].bottom_right.x,
-                                 other->areas[0].bottom_right.x);
-                clust->areas[1].bottom_right.y =
-                        std::min(clust->areas[1].bottom_right.y,
-                                 other->areas[0].bottom_right.y);
-                return;
-            }
-            else {
-                std::cout << "There is an error in updateAreas (A)" << std::endl;
-                std::cout << clust->index << " has collided with " << other->index << std::endl;
-                std::cout << "clust coord: " << clust->particles[0].pos.x << "," << clust->particles[0].pos.y << std::endl;
-                std::cout << "other coord: " << other->particles[0].pos.x << "," << other->particles[0].pos.y << std::endl;
-
-                std::cout << "clust[0] tlx = " << clust->areas[0].top_left.x << std::endl;
-                std::cout << "clust[0] brx = " << clust->areas[0].bottom_right.x << std::endl;
-                std::cout << "other[0] tlx = " << other->areas[0].top_left.x << std::endl;
-                std::cout << "other[0] brx = " << other->areas[0].bottom_right.x << std::endl;
-
-
-                std::cout << "nbr areas out = " << nbrAreasOut(clust, other, x_size, y_size) << std::endl;
-                std::cout << "does the cluster we focus on cross the x-boundary? " << crossXBound(*clust, x_size) << std::endl;
-                std::cout << "does the target cross the x-boundary? " << crossXBound(*other, x_size) << std::endl;
-                std::cout << "does the cluster we focus on cross the y-boundary? " << crossYBound(*clust, x_size) << std::endl;
-                std::cout << "does the target cross the y-boundary? " << crossYBound(*other, x_size) << std::endl;
-                if (nbrAreasOut(clust, other, x_size, y_size) == 2){
-                    std::cout << "is the target on the left side of the domain? " << testOtherLeft(other, x_size) << std::endl;
-                    std::cout << "is the target on the right side of the domain? " << testOtherRight(other, x_size) << std::endl;
-                    std::cout << "is the cluster on the left side of the domain? " << testClustLeft(clust, x_size) << std::endl;
-                    std::cout << "is the cluster on the right side of the domain? " << testClustRight(clust, x_size) << std::endl;
-                    std::cout << "is the target on the top side of the domain? " << testClustUp(other, y_size) << std::endl;
-                    std::cout << "is the cluster on the top side of the domain? " <<testClustUp(clust, y_size) << std::endl;
-                }
-                std::cout << std::endl;
-            }
-        }
-        else if (crossXBound(*other, x_size)){                                  //The other cluster crosses the boundary. Have to expand the Areas vector.
-            if (testClustRight(clust, x_size)){                                 //This checks 4) in the notes.
-                clust->areas.push_back(clust->areas[0]);                        //This is done by just duplicating the 0th element.
-                clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
-                                                    other->areas[0].top_left.x);
-                clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
-                                                    other->areas[0].top_left.y);
-                clust->areas[0].bottom_right.x = x_size;
-                clust->areas[0].bottom_right.y =
-                        std::min(clust->areas[0].bottom_right.y,
-                                 other->areas[1].bottom_right.y);
-                clust->areas[1].top_left.x = 0;
-                clust->areas[1].top_left.y=std::min(clust->areas[0].top_left.y,
-                                                    other->areas[1].top_left.y);
-                clust->areas[1].bottom_right.x = other->areas[1].bottom_right.x;
-                clust->areas[1].bottom_right.y =
-                        std::min(clust->areas[0].bottom_right.y,
-                                 other->areas[1].bottom_right.y);
-                return;
-            }
-            else if (testClustLeft(clust, x_size)){                               //checks 5) in the notes.
-                clust->areas.push_back(clust->areas[0]);                        //This is done by just duplicating the 0th element.
-                clust->areas[0].top_left.x = other->areas[0].top_left.x;
-                clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
-                                                    other->areas[0].top_left.y);
-                clust->areas[0].bottom_right.x = x_size;
-                clust->areas[0].bottom_right.y =
-                        std::min(clust->areas[0].bottom_right.y,
-                                 other->areas[1].bottom_right.y);
-                clust->areas[1].top_left.x = 0;
-                clust->areas[1].top_left.y=std::max(clust->areas[0].top_left.y,
-                                                    other->areas[1].top_left.y);
-                clust->areas[1].bottom_right.x =
-                        std::max(clust->areas[1].bottom_right.x,
-                                 other->areas[1].bottom_right.x);
-                clust->areas[1].bottom_right.y =
-                        std::min(clust->areas[1].bottom_right.y,
-                                 other->areas[1].bottom_right.y);
-                return;
-            }
-            else {
-                std::cout << "There is an error in updateAreas (B)" << std::endl;
-                std::cout << clust->index << " has collided with " << other->index << std::endl;
-                std::cout << "clust coord: " << clust->particles[0].pos.x << "," << clust->particles[0].pos.y << std::endl;
-                std::cout << "other coord: " << other->particles[0].pos.x << "," << other->particles[0].pos.y << std::endl;
-
-                std::cout << "clust[0] tlx = " << clust->areas[0].top_left.x << std::endl;
-                std::cout << "clust[0] brx = " << clust->areas[0].bottom_right.x << std::endl;
-                std::cout << "other[0] tlx = " << other->areas[0].top_left.x << std::endl;
-                std::cout << "other[0] brx = " << other->areas[0].bottom_right.x << std::endl;
-
-
-                std::cout << "nbr areas out = " << nbrAreasOut(clust, other, x_size, y_size) << std::endl;
-                std::cout << "does the cluster we focus on cross the x-boundary? " << crossXBound(*clust, x_size) << std::endl;
-                std::cout << "does the target cross the x-boundary? " << crossXBound(*other, x_size) << std::endl;
-                std::cout << "does the cluster we focus on cross the y-boundary? " << crossYBound(*clust, x_size) << std::endl;
-                std::cout << "does the target cross the y-boundary? " << crossYBound(*other, x_size) << std::endl;
-                if (nbrAreasOut(clust, other, x_size, y_size) == 2){
-                    std::cout << "is the target on the left side of the domain? " << testOtherLeft(other, x_size) << std::endl;
-                    std::cout << "is the target on the right side of the domain? " << testOtherRight(other, x_size) << std::endl;
-                    std::cout << "is the cluster on the left side of the domain? " << testClustLeft(clust, x_size) << std::endl;
-                    std::cout << "is the cluster on the right side of the domain? " << testClustRight(clust, x_size) << std::endl;
-                    std::cout << "is the target on the top side of the domain? " << testClustUp(other, y_size) << std::endl;
-                    std::cout << "is the cluster on the top side of the domain? " <<testClustUp(clust, y_size) << std::endl;
-                }
-                std::cout << std::endl;
-            }
-        }
-        else if(crossYBound(*clust, y_size)){
-            if (crossYBound(*other, y_size)){                                   //checks 6) in the notes
-                clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
-                                                    other->areas[0].top_left.x);
-                clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
-                                                    other->areas[0].top_left.y);
-                clust->areas[0].bottom_right.x =
-                        std::max(clust->areas[0].bottom_right.x,
-                                 other->areas[0].bottom_right.x);
-                clust->areas[0].bottom_right.y = 0;
-                clust->areas[1].top_left.x=std::min(clust->areas[1].top_left.x,
-                                                    other->areas[1].top_left.x);
-                clust->areas[1].top_left.y = y_size;
-                clust->areas[1].bottom_right.x =
-                        std::max(clust->areas[1].bottom_right.x,
-                                 other->areas[1].bottom_right.x);
-                clust->areas[1].bottom_right.y =
-                        std::min(clust->areas[1].bottom_right.y,
-                                 other->areas[1].bottom_right.y);
-                return;
-            }
-            else if (testClustUp(other, y_size)){                                 //checks 7) in the notes OTHER
-                clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
-                                                    other->areas[0].top_left.x);
-                clust->areas[0].top_left.y =std::max(clust->areas[0].top_left.y,
-                                                     other->areas[0].top_left.y);
-                clust->areas[0].bottom_right.x =
-                        std::max(clust->areas[0].bottom_right.x,
-                                 other->areas[0].bottom_right.x);
-                clust->areas[0].bottom_right.y = 0;
-                clust->areas[1].top_left.x=std::min(clust->areas[0].top_left.x,
-                                                    other->areas[0].top_left.x);
-                clust->areas[1].top_left.y = y_size;
-                clust->areas[1].bottom_right.x =
-                        std::max(clust->areas[1].bottom_right.x,
-                                 other->areas[0].bottom_right.x);
-                clust->areas[1].bottom_right.y =
-                        std::max(clust->areas[1].bottom_right.y,
-                                 other->areas[0].bottom_right.y);
-                return;
-            }
-            else if (testClustDown(other, y_size)){                               //checks 8) in the notes. OTHER
-                clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
-                                                    other->areas[0].top_left.x);
-                clust->areas[0].top_left.y=std::min(clust->areas[0].top_left.y,
-                                                    other->areas[0].top_left.y);
-                clust->areas[0].bottom_right.x =
-                        std::max(clust->areas[0].bottom_right.x,
-                                 other->areas[0].bottom_right.x);
-                clust->areas[0].bottom_right.y = 0;
-                clust->areas[1].top_left.x=std::min(clust->areas[0].top_left.x,
-                                                    other->areas[0].top_left.x);
-                clust->areas[1].top_left.y = y_size;
-                clust->areas[1].bottom_right.x =
-                        std::max(clust->areas[1].bottom_right.x,
-                                 other->areas[0].bottom_right.x);
-                clust->areas[1].bottom_right.y =
-                        std::min(clust->areas[1].bottom_right.y,
-                                 other->areas[0].bottom_right.y);
-                return;
-            }
-            else {
-                std::cout << "There is an error in updateAreas (C)" << std::endl;
-            }
-        }
-        else if (crossYBound(*other, y_size)){
-            clust->areas.push_back(clust->areas[0]);                            //We have to expand the areas vector.
-            if (testClustUp(clust, y_size)){                                    //checks 9) in notes. CLUST
-                clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
-                                                    other->areas[0].top_left.x);
-                clust->areas[0].top_left.y=std::max(clust->areas[0].top_left.y,
-                                                    other->areas[0].top_left.y);
-                clust->areas[0].bottom_right.x =
-                        std::max(clust->areas[0].bottom_right.x,
-                                 other->areas[0].bottom_right.x);
-                clust->areas[0].bottom_right.y = 0;
-                clust->areas[1].top_left.x=std::min(clust->areas[0].top_left.x,
-                                                    other->areas[0].top_left.x);
-                clust->areas[1].top_left.y = y_size;
-                clust->areas[1].bottom_right.x =
-                        std::max(clust->areas[0].bottom_right.x,
-                                 other->areas[1].bottom_right.x);
-                clust->areas[1].bottom_right.y =
-                        std::max(clust->areas[1].bottom_right.y,
-                                 other->areas[1].bottom_right.y);
-                return;
-            }
-            else if (testClustDown(clust, y_size)){                             //checks 10) in the notes. CLUST
-                clust->areas[0].top_left.x=std::min(clust->areas[0].top_left.x,
-                                                    other->areas[0].top_left.x);
-                clust->areas[0].top_left.y=std::min(clust->areas[0].top_left.y,
-                                                    other->areas[0].top_left.y);
-                clust->areas[0].bottom_right.x =
-                        std::max(clust->areas[0].bottom_right.x,
-                                 other->areas[0].bottom_right.x);
-                clust->areas[0].bottom_right.y = 0;
-                clust->areas[1].top_left.x=std::min(clust->areas[0].top_left.x,
-                                                    other->areas[1].top_left.x);
-                clust->areas[1].top_left.y = y_size;
-                clust->areas[1].bottom_right.x =
-                        std::max(clust->areas[0].bottom_right.x,
-                                 other->areas[1].bottom_right.x);
-
-                clust->areas[1].bottom_right.y =
-                        std::min(clust->areas[1].bottom_right.y,
-                                 other->areas[1].bottom_right.y);
-                return;
-            }
-            else {
-                std::cout << "There is an error in updateAreas (D)" << std::endl;
-            }
-        }
-    }
-    else if (nbrAreasOut(clust, other, x_size, y_size) == 4){
-        if ((crossXBound(*clust, x_size)) && (crossYBound(*clust, y_size)) &&
-             (other->areas.size() == 1)){
-            if (otherLeftFour(clust, other)){
-                if (otherDownFour(clust, other)){                               //checks 11) in the notes
-                    clust->areas[0].top_left.y =
-                            std::max(clust->areas[1].top_left.y,
-                                     other->areas[0].top_left.y);
-                    clust->areas[1].top_left.x = 0;
-                    clust->areas[1].top_left.y =
-                            std::max(clust->areas[1].top_left.y,
-                                     other->areas[0].top_left.y);
-                    clust->areas[1].bottom_right.x =
-                            std::max(clust->areas[1].bottom_right.x,
-                                     other->areas[0].bottom_right.x);
-                    clust->areas[2].top_left.x = 0;
-                    clust->areas[2].top_left.y = y_size;
-                    clust->areas[2].bottom_right.x =
-                            std::max(clust->areas[1].bottom_right.x,
-                                     other->areas[0].bottom_right.x);
-                    clust->areas[2].bottom_right.y =
-                            clust->areas[2].bottom_right.y;
-                    return;
-
-                }
-                else if (otherUpFour(clust, other)){                            //checks 12) in notes
-                    clust->areas[1].bottom_right.x =
-                            std::max(clust->areas[1].bottom_right.x,
-                                     other->areas[0].bottom_right.x);
-                    clust->areas[2].bottom_right.x =
-                            std::max(clust->areas[2].bottom_right.x,
-                                     other->areas[0].bottom_right.x);
-                    clust->areas[2].bottom_right.y =
-                            std::min(clust->areas[2].bottom_right.y,
-                                     other->areas[0].bottom_right.y);
-                    clust->areas[3].bottom_right.y =
-                            std::min(clust->areas[3].bottom_right.y,
-                                     other->areas[0].bottom_right.y);
-                    return;
-                }
-                else {
-                    std::cout << "There is an error in updateAreas (E)" << std::endl;
-                }
-            }
-            else if (otherRightFour(clust,other)){
-                if (otherUpFour(clust, other)){                               //checks 13) in the notes
-                    clust->areas[0].top_left.x =
-                            std::min(clust->areas[0].top_left.x,
-                                     other->areas[0].top_left.x);
-                    clust->areas[2].bottom_right.y =
-                            std::min(clust->areas[2].bottom_right.y,
-                                     other->areas[0].bottom_right.y);
-                    clust->areas[3].top_left.x =
-                            std::min(clust->areas[3].top_left.x,
-                                     other->areas[0].top_left.x);
-                    clust->areas[3].bottom_right.y =
-                            std::min(clust->areas[3].bottom_right.y,
-                                     other->areas[0].bottom_right.y);
-                    return;
-                }
-                else if (otherDownFour(clust, other)){                          //checks 14) in the notes
-                    clust->areas[0].top_left.x =
-                            std::min(clust->areas[0].top_left.x,
-                                     other->areas[0].top_left.x);
-                    clust->areas[0].top_left.y =
-                            std::max(clust->areas[0].top_left.y,
-                                     other->areas[0].top_left.y);
-                    clust->areas[1].top_left.y =
-                            std::max(clust->areas[1].top_left.y,
-                                     other->areas[0].top_left.y);
-                    clust->areas[3].top_left.x =
-                            std::min(clust->areas[3].top_left.x,
-                                     other->areas[0].top_left.x);
-                    return;
-                }
-                else {
-                    std::cout << "There is an error in updateAreas (F)" << std::endl;
-                }
-            }
-        }
-        else if ((crossXBound(*other, x_size)) && (crossYBound(*other, y_size))
-                 && (clust->areas.size() == 1)){
-            if (otherLeftFour(clust, other)){
-                if (otherDownFour(clust, other)){                               //checks 15) in the notes
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas[0].top_left.x = other->areas[0].top_left.x;
-                    clust->areas[0].top_left.y =
-                            std::max(other->areas[0].top_left.y,
-                                     clust->areas[0].top_left.y);
-                    clust->areas[0].bottom_right = other->areas[0].bottom_right;
-                    clust->areas[1].top_left.x = 0;
-                    clust->areas[1].top_left.y =
-                            std::max(other->areas[1].top_left.y,
-                                     clust->areas[1].top_left.y);
-                    clust->areas[1].bottom_right.x =
-                            std::max(clust->areas[1].bottom_right.x,
-                                     other->areas[1].bottom_right.x);
-                    clust->areas[1].bottom_right.y = 0;
-                    clust->areas[2].top_left = other->areas[2].top_left;
-                    clust->areas[2].bottom_right.x =
-                            std::max(clust->areas[2].bottom_right.x,
-                                     other->areas[2].bottom_right.x);
-                    clust->areas[2].bottom_right.y =
-                            other->areas[2].bottom_right.y;
-                    clust->areas[3].top_left = other->areas[3].top_left;
-                    clust->areas[3].bottom_right = other->areas[3].bottom_right;
-                    return;
-                }
-                else if (otherUpFour(clust, other)){                            //checks 16) in the notes
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas[0].top_left = other->areas[0].top_left;
-                    clust->areas[0].bottom_right = other->areas[0].bottom_right;
-                    clust->areas[1].top_left = other->areas[1].top_left;
-                    clust->areas[1].bottom_right.x =
-                            std::max(clust->areas[1].bottom_right.x,
-                                     other->areas[1].bottom_right.x);
-                    clust->areas[1].bottom_right.y = 0;
-                    clust->areas[2].top_left = other->areas[2].top_left;
-                    clust->areas[2].bottom_right.x =
-                            std::max(clust->areas[2].bottom_right.x,
-                                     other->areas[2].bottom_right.x);
-                    clust->areas[2].bottom_right.y =
-                            std::min(clust->areas[2].bottom_right.y,
-                                     other->areas[2].bottom_right.y);
-                    clust->areas[3].top_left = other->areas[3].top_left;
-                    clust->areas[3].bottom_right.x = x_size;
-                    clust->areas[3].bottom_right.y =
-                            std::min(clust->areas[3].bottom_right.y,
-                                     other->areas[3].bottom_right.y);
-                    return;
-                }
-                else {
-                    std::cout << "There is an error in updateAreas (G)" << std::endl;
-                }
-            }
-            else if (otherRightFour(clust, other)){
-                if (otherUpFour(clust, other)){                                 //checks 17 in the notes
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas[0].top_left.x =
-                            std::min(clust->areas[0].top_left.x,
-                                     other->areas[0].top_left.x);
-                    clust->areas[0].top_left.y = other->areas[0].top_left.y;
-                    clust->areas[0].bottom_right = other->areas[0].bottom_right;
-                    clust->areas[1].top_left = other->areas[1].top_left;
-                    clust->areas[1].bottom_right = other->areas[1].bottom_right;
-                    clust->areas[2].top_left = other->areas[2].top_left;
-                    clust->areas[2].bottom_right.x =
-                            other->areas[2].bottom_right.x;
-                    clust->areas[2].bottom_right.y =
-                            std::min(clust->areas[2].bottom_right.y,
-                                     other->areas[2].bottom_right.y);
-                    clust->areas[3].top_left.x =
-                            std::min(clust->areas[3].top_left.x,
-                                     other->areas[3].top_left.x);
-                    clust->areas[3].top_left.y = other->areas[3].top_left.y;
-                    clust->areas[3].bottom_right.x = x_size;
-                    clust->areas[3].bottom_right.y =
-                            std::min(clust->areas[3].bottom_right.y,
-                                     other->areas[3].bottom_right.y);
-                    return;
-                }
-                else if (otherDownFour(clust, other)){                          //checks 18 in the notes
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas.push_back(clust->areas[0]);
-                    clust->areas[0].top_left.y =
-                            std::max(clust->areas[0].top_left.y,
-                                     other->areas[0].top_left.y);
-                    clust->areas[0].top_left.x =
-                            std::min(clust->areas[0].top_left.x,
-                                     other->areas[0].top_left.x);
-                    clust->areas[0].bottom_right = other->areas[0].bottom_right;
-//                    clust->areas[1].top_left.x = other->areas[0].top_left.x;
-                    clust->areas[1].top_left.x = 0;
-                    clust->areas[1].top_left.y =
-                            std::max(clust->areas[1].top_left.y,
-                                     other->areas[1].top_left.y);
-                    clust->areas[1].bottom_right = other->areas[1].bottom_right;
-                    clust->areas[2] = other->areas[2];
-                    clust->areas[3].top_left.x =
-                            std::min(clust->areas[3].top_left.x,
-                                     other->areas[3].top_left.x);
-                    clust->areas[3].top_left.y = y_size;
-                    clust->areas[3].bottom_right = other->areas[3].bottom_right;
-                    return;
-                }
-                else {
-                    std::cout << "There is an error in updateAreas (H)" << std::endl;
-                }
-            }
-        }
-        else if ((crossXBound(*clust, x_size)) && (crossYBound(*clust, y_size))
-                  && (other->areas.size() == 2)){
-            if (crossYBound(*other, y_size)){
-                if (otherRightFour(clust, other)){                               //checks 19) in the notes
-                    clust->areas[0].top_left.x =
-                            std::min(clust->areas[0].top_left.x,
-                                     other->areas[0].top_left.x);
-                    clust->areas[0].top_left.y =
-                            std::max(clust->areas[0].top_left.y,
-                                     other->areas[0].top_left.y);
-                    clust->areas[3].top_left.x =
-                            std::min(clust->areas[3].top_left.x,
-                                     other->areas[1].top_left.x);
-                    clust->areas[3].bottom_right.y =
-                            std::min(clust->areas[3].bottom_right.y,
-                                     other->areas[1].bottom_right.y);
-                    return;
-                }
-                else if (otherLeftFour(clust, other)){                          //checks 20) in the notes
-                    clust->areas[1].bottom_right.x =
-                            std::max(clust->areas[1].bottom_right.x,
-                                     other->areas[0].bottom_right.x);
-                    clust->areas[1].top_left.y =
-                            std::max(clust->areas[1].top_left.y,
-                                     other->areas[0].top_left.y);
-                    clust->areas[2].bottom_right.x =
-                            std::max(clust->areas[1].bottom_right.x,
-                                     other->areas[0].bottom_right.x);
-                    clust->areas[2].bottom_right.y =
-                            std::min(clust->areas[2].bottom_right.y,
-                                     other->areas[1].bottom_right.y);
-                    return;
-                }
-                else {
-                    std::cout << "There is an error in updateAreas (I)" << std::endl;
-                }
-            }                                                                   //case 21) and 22) are mapped to 11) and 12), but works.
-        }
-        else if ((crossXBound(*other, x_size)) && (crossYBound(*other, y_size))
-                 && (clust->areas.size() == 2)){
-            if (otherLeftFour(clust, other)){                                   //checks 23) in the notes
-                clust->areas.push_back(clust->areas[0]);
-                clust->areas.push_back(clust->areas[1]);
-                clust->areas[0] = other->areas[0];
-                clust->areas[1].top_left.x = 0;
-                clust->areas[1].top_left.y =
-                        std::min(clust->areas[0].top_left.y,
-                                 other->areas[1].top_left.y);
-                clust->areas[1].bottom_right.x =
-                        std::max(clust->areas[2].bottom_right.x,
-                                 other->areas[1].bottom_right.x);
-                clust->areas[1].bottom_right.y = 0;
-                clust->areas[2].top_left = other->areas[2].top_left;
-                clust->areas[2].bottom_right.x =
-                        std::max(clust->areas[3].bottom_right.x,
-                                 other->areas[2].bottom_right.x);
-                clust->areas[2].bottom_right.y =
-                        std::min(clust->areas[3].bottom_right.y,
-                                 other->areas[2].bottom_right.y);
-                clust->areas[3] = other->areas[3];
-                return;
-            }
-            else if (otherRightFour(clust, other)){                             //checks 24) in the notes
-                clust->areas.push_back(clust->areas[0]);
-                clust->areas.push_back(clust->areas[1]);
-                clust->areas[0].top_left.x =
-                        std::min(clust->areas[0].top_left.x,
-                                 other->areas[0].top_left.x);
-                clust->areas[0].top_left.y =
-                        std::max(clust->areas[0].top_left.y,
-                                 other->areas[0].top_left.y);
-                clust->areas[0].bottom_right.x = x_size;
-                clust->areas[0].bottom_right.y = 0;
-                clust->areas[1].top_left.x = 0;
-                clust->areas[1].top_left.y =
-                        std::max(clust->areas[2].top_left.y,
-                                 other->areas[1].top_left.y);
-                clust->areas[1].bottom_right = other->areas[1].bottom_right;
-                clust->areas[2].top_left = other->areas[2].top_left;
-                clust->areas[2].bottom_right.x = other->areas[2].bottom_right.x;
-                clust->areas[2].bottom_right.y =
-                        std::min(clust->areas[3].bottom_right.y,
-                                 other->areas[2].bottom_right.y);
-                clust->areas[3].bottom_right.x = x_size;
-                clust->areas[3].bottom_right.y =
-                        std::min(clust->areas[3].bottom_right.y,
-                                 other->areas[3].bottom_right.y);
-                return;
-            }
-            else {
-                std::cout << "There is an error in updateAreas (J)" << std::endl;
-            }
-        }
-    }
 }
 
-velocity calc_vel(Quadtree_vel* vel_tree, Cluster* clust){
-    return vel_tree->queryRange_vel(clust->particles[0].pos);
-}
-
-void takeStepTest(std::map<int, Cluster*> &clusters, Quadtree_vel &vel_tree){
-    velocity tmp;
-    typedef std::map<int, Cluster*>::iterator it_type;
-    for(it_type iterator = clusters.begin(); iterator != clusters.end(); iterator++){
-        if (iterator->second != nullptr){
-            tmp = vel_tree.queryRange_vel(iterator->second->particles[0].pos);
-            iterator->second->particles[0].pos.x += tmp.v*std::cos(tmp.theta);
-            iterator->second->particles[0].pos.y += tmp.v*std::sin(tmp.theta);
-        }
-    }
-}
-
-void visualizeVelocity(std::vector<sf::RectangleShape> &lines,
-                       std::vector<sf::CircleShape> &triangles,
-                       std::vector<sf::Transform> &line_transforms,
-                       std::vector<sf::Transform> &tri_transforms,
-                       int vel_gen, int x_size, int y_size, double PI,
-                       Quadtree_vel &tree){
-    int grid_size = std::sqrt(std::pow(4, vel_gen));
-    double h = std::min(x_size, y_size)/double(grid_size);
-    double scale, tri_len, a;
-
-    Point tmp_p;
-    velocity tmp;
-    for (int i = 0; i < grid_size; ++i){
-        for (int j = 0; j < grid_size; ++j){
-            tmp_p.x = j*h + h/2.0 + 0.01;
-            tmp_p.y = i*h + h/2.0 + 0.01;
-            tmp = tree.queryRange_vel(tmp_p);
-            scale = tmp.v/2.0;
-            tri_len = (h/4.0)*scale;
-            a = std::sqrt(tri_len*tri_len + (tri_len/2.0)*(tri_len/2.0));
-
-            sf::Transform transform;
-            transform.rotate(180 + (180*tmp.theta)/PI, i*h + h/2.0 , j*h + h/2.0);
-            sf::RectangleShape line(sf::Vector2f(h/2.0, 3));
-            line.setPosition(i*h + h/2.0, j*h + h/2.0);
-            lines.push_back(line);
-            line_transforms.push_back(transform);
-
-            sf::Transform tri_trans;
-            tri_trans.rotate(90 + (180*tmp.theta)/PI,
-                             i*h + h/2.0,
-                             j*h + h/2.0).translate(i*h + h/2.0 - tri_len, j*h + h/2.0 - a/2.0);
-            sf::CircleShape triangle(tri_len, 3);
-            triangle.setFillColor(sf::Color::White);
-            triangles.push_back(triangle);
-            tri_transforms.push_back(tri_trans);
-
-        }
-    }
-}
-
-double findLifetime(eddy e){
-    return e.L/std::sqrt(e.E);
+double findLifetime(eddy e, double L_typical){
+    return e.L*L_typical/std::sqrt(e.E);
 }
 
 double findStepLength(Cluster* cluster, Quadtree_vel &vel_tree, double PI,
                       double dt, double &step_dir, double diff_threshold,
-                      double L_typical, double rho_air, double rho_dust,
-                      double C_sphere){
+                      double L_typical, double rho_air,  double C_sphere,
+                      double size, double vel_size){
     double step_len = 0;
     if (cluster != nullptr){
         double sx = 0;
         double sy = 0;
-        velocity temp = vel_tree.queryRange_vel(cluster->CM);
+        Velocity temp = vel_tree.queryRange_vel(mapToVelDomain(size, vel_size,
+                                                               cluster->CM));
         if (cluster->radius*L_typical < diff_threshold){
             double D = (1.38*std::pow(10.0, -23.0)*293.0*10.0)/                 //The 10 is to take cunningham correctino factor into account
-                    (6.0*PI*1.75*std::pow(10.0,-5.0)*cluster->radius*L_typical);
+            (6.0*PI*1.75*std::pow(10.0,-5.0)*cluster->radius*L_typical);
             step_len = std::sqrt(2.0*dt*D);
             sx += step_len*std::cos(step_dir) + temp.v*std::cos(temp.theta)*dt;
             sy += step_len*std::sin(step_dir) + temp.v*std::sin(temp.theta)*dt;
             step_len = std::sqrt(std::pow(sx,2.0) + std::pow(sy, 2.0))/L_typical;
             step_dir = findDirection(sx, sy, PI);
-//            std::cout << "step_len = " << step_len << " units" << std::endl;
-//            std::cout << "step_len = " << step_len*L_typical << " m" << std::endl;
         }
-        else if (cluster->radius*L_typical > diff_threshold){
-//            std::cout << "cluster->particles.size() = " << cluster->particles.size() << std::endl;
-//            std::cout << "cluster->vel.v = " << cluster->vel.v << " [m/s]" << std::endl;
-//            std::cout << "cluster->vel.theta = " << cluster->vel.theta << " [rad]" << std::endl;
-//            std::cout << "temp.v = " << temp.v << " [m/s]" << std::endl;
-//            std::cout << "temp.theta = " << temp.theta << " [rad]" << std::endl;
-//            std::cout << "v_surr_x = " << temp.v*std::cos(temp.theta) << std::endl;
-//            std::cout << "v_surr_y = " << temp.v*std::sin(temp.theta) << std::endl;
-//            std::cout << "v_clust_x = " << cluster->vel.v*std::cos(cluster->vel.theta) << std::endl;
-//            std::cout << "v_clust_y = " << cluster->vel.v*std::sin(cluster->vel.theta) << std::endl;
-//            std::cout << "cluster->radius = " << cluster->radius << std::endl;
-//            std::cout << "cluster->index = " << cluster->index << std::endl;
-
-            double m_clust = rho_dust*(4.0/3.0)*PI*std::pow(cluster->radius*L_typical,3.0);
-//            std::cout << "m_clust = " << m_clust << std::endl;
+        else if (cluster->radius*L_typical >= diff_threshold){
             double A = PI*std::pow(cluster->radius*L_typical, 2.0);
             double Fx = 0.5*rho_air*std::pow(cluster->vel.v*
                                              std::cos(cluster->vel.theta) -
@@ -1954,25 +541,17 @@ double findStepLength(Cluster* cluster, Quadtree_vel &vel_tree, double PI,
                                              std::sin(cluster->vel.theta) -
                                              temp.v*std::sin(temp.theta),2.0)*
                                              C_sphere*A;
-            double a_x = Fx/m_clust;
-            double a_y = Fy/m_clust;
-//            std::cout << "a_x = " << a_x << " [m/s^2]" << std::endl;
-//            std::cout << "a_y = " << a_y << " [m/s^2]" << std::endl;
+            double a_x = Fx/cluster->mass;
+            double a_y = Fy/cluster->mass;
             double D = (1.38*std::pow(10.0, -23.0)*293.0)/                      //Note no cunningham correction factor here.
                     (6.0*PI*1.75*std::pow(10.0,-5.0)*cluster->radius*L_typical);
             step_len = std::sqrt(2.0*dt*D);
-            sx += step_len*std::cos(step_dir) + cluster->vel.v*std::cos(cluster->vel.theta) + (a_x*dt);
-            sy += step_len*std::sin(step_dir) + cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
-//            sx = cluster->vel.v*std::cos(cluster->vel.theta) + (a_x*dt);
-//            sy = cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
+            sx += step_len*std::cos(step_dir) +
+                    cluster->vel.v*std::cos(cluster->vel.theta) + (a_x*dt);
+            sy += step_len*std::sin(step_dir) +
+                    cluster->vel.v*std::sin(cluster->vel.theta) + (a_y*dt);
             step_len = std::sqrt(std::pow(sx, 2.0) + std::pow(sy, 2.0));
             step_dir = findDirection(sx, sy, PI);
-//            std::cout << "Fx = " << Fx << std::endl;
-//            std::cout << "Fy = " << Fy << std::endl;
-//            std::cout << "step_len = " << step_len << " [m/s]" << std::endl;
-//            std::cout << "step_len = " << (step_len/L_typical)*dt << " [units/timestep]" << std::endl;
-//            std::cout << "step_dir = " << step_dir << std::endl;
-//            std::cout << std::endl;
             cluster->vel.v = step_len;
             cluster->vel.theta = step_dir;
             step_len = (step_len/L_typical)*dt;
@@ -2003,28 +582,31 @@ double findDirection(double dx, double dy, double PI){
     else if ((dx > 0) && (dy < 0)){
         return std::asin(dy/hyp);
     }
+    return 0;
 }
 
-Point FindCM(Cluster clust, double rho_carbon, double rho_dust, double r_dust,
-             double r_carbon, double PI, double L_typical){
-    double M = 0, m = 0;
-    double sum_x = 0, sum_y = 0;
-    for (auto && particle:clust.particles){
-        if (particle.r_p == r_carbon){
-            m = rho_carbon*(4.0/3.0)*PI*std::pow(particle.r_p*L_typical, 3.0);
-            M += m;
-            sum_x += m*particle.pos.x;
-            sum_y += m*particle.pos.y;
+void printTurnovertimes(Quadtree_vel &vel_tree, double L_typical){
+    std::cout << vel_tree.turnovertime << "  " << vel_tree.E.theta << std::endl;
+    std::cout << vel_tree.ne->turnovertime << "  " << vel_tree.ne->E.theta << std::endl;
+    std::cout << vel_tree.ne->ne->turnovertime << "  " << vel_tree.ne->ne->E.theta << std::endl;
+    std::cout << vel_tree.ne->ne->ne->turnovertime << "  " << vel_tree.ne->ne->ne->E.theta << std::endl;
+    std::cout << vel_tree.ne->ne->ne->ne->turnovertime << "  " << vel_tree.ne->ne->ne->ne->E.theta << std::endl;
+    std::cout << vel_tree.ne->ne->ne->ne->ne->turnovertime << "  " << vel_tree.ne->ne->ne->ne->ne->E.theta << std::endl;
+    std::cout << vel_tree.ne->ne->ne->ne->ne->ne->turnovertime << "  " << vel_tree.ne->ne->ne->ne->ne->ne->E.theta << std::endl;
+    std::cout << vel_tree.ne->ne->ne->ne->ne->ne->ne->turnovertime << std::endl;
+    std::cout << vel_tree.ne->ne->ne->ne->ne->ne->ne->ne->turnovertime << std::endl;
 
-        }
-        else if (particle.r_p == r_dust){
-            m = rho_dust*(4.0/3.0)*PI*std::pow(particle.r_p*L_typical, 3.0);
-            M += m;
-            sum_x += m*particle.pos.x;
-            sum_y += m*particle.pos.y;
-        }
-    }
-    return Point(sum_x/M, sum_y/M);
+    double L_0 = (vel_tree.boundary.bottom_right.x - vel_tree.boundary.top_left.x)*L_typical;
+    std::cout << "L_0 = " << L_0 << " m" << std::endl;
+    std::cout << L_0/std::pow(2.0,1.0) << " m" << std::endl;
+    std::cout << L_0/std::pow(2.0,2.0) << " m" << std::endl;
+    std::cout << L_0/std::pow(2.0,3.0) << " m" << std::endl;
+    std::cout << L_0/std::pow(2.0,4.0) << " m" << std::endl;
+    std::cout << L_0/std::pow(2.0,5.0) << " m" << std::endl;
+    std::cout << L_0/std::pow(2.0,6.0) << " m" << std::endl;
+    std::cout << L_0/std::pow(2.0,7.0) << " m" << std::endl;
+    std::cout << L_0/std::pow(2.0,8.0) << " m" << std::endl;
+    std::cout << L_0/std::pow(2.0,9.0) << " m" << std::endl;
 }
 
 void consMomentum(Cluster* clust, Cluster other, double PI){
@@ -2043,10 +625,35 @@ void consMomentum(Cluster* clust, Cluster other, double PI){
     clust->vel.theta = theta;
 }
 
+Point FindCM(Cluster clust, double rho_carbon, double rho_dust, double r_dust,
+             double r_carbon, double PI, double L_typical){
+    double M = 0;
+    double sum_x = 0, sum_y = 0;
+    double m_carbon = rho_carbon*(4.0/3.0)*PI*std::pow(r_carbon*L_typical, 3.0);
+    double m_dust = rho_dust*(4.0/3.0)*PI*std::pow(r_dust*L_typical, 3.0);
+    for (auto && particle:clust.particles){
+        if (particle.r_p == r_carbon){
+            M += m_carbon;
+            sum_x += m_carbon*particle.pos.x;
+            sum_y += m_carbon*particle.pos.y;
+
+        }
+        else if (particle.r_p == r_dust){
+            M += m_dust;
+            sum_x += m_dust*particle.pos.x;
+            sum_y += m_dust*particle.pos.y;
+        }
+    }
+    return Point(sum_x/M, sum_y/M);
+}
+
 double findSystemSize(double r_p, double Cc, double PI, double dt,
                       double L_typical, int vel_generations, double E_0,
-                      double p1, double simulation_time, double dust_density,
-                      double carbon_density, int tot_objects){
+                      double p1, double simulation_time, double &dust_density,
+                      double carbon_density, int tot_objects, int nbr_dust,
+                      int nbr_carbon, double &dust_size, double &carbon_size,
+                      double carbon_system_size, double dust_system_size,
+                      double max_lifetime){
     double D = (1.38*std::pow(10.0, -23.0)*293.0*Cc)/
             (6.0*PI*1.75*std::pow(10.0,-5.0)*r_p*L_typical);
     double diff_step_len = std::sqrt(2.0*dt*D);
@@ -2055,20 +662,362 @@ double findSystemSize(double r_p, double Cc, double PI, double dt,
         u_highest += std::sqrt(std::pow(p1, i)*E_0);
     }
     double max_movement = u_highest*(dt/L_typical) + diff_step_len/L_typical;   //units/timestep is the the dimensionless displacement.
-//    double size = 2*max_movement*(L_typical/dt)*simulation_time;
-    std::cout << "dust_density = " << dust_density << std::endl;
-    std::cout << "dust distribution size = " << u_highest*(dt/L_typical)*simulation_time/dt << std::endl;
-    int nbr_dust = round(dust_density*u_highest*(dt/L_typical)*simulation_time/dt);
-    std::cout << "nbr_dust = " << nbr_dust << std::endl;
-    std::cout << "spread over a square of size " << u_highest*(dt/L_typical)*200 << std::endl;
     double size = 2*max_movement*(L_typical/dt)*simulation_time +
-                findCarbonDistributionSize(carbon_density, tot_objects, nbr_dust);
+                carbon_size*L_typical;
+    dust_size = 0.5;
+    std::cout << "max dust = " << dust_size + 2*(u_highest*max_lifetime) << std::endl;
+    std::cout << "max carbon = " << carbon_system_size*L_typical + (max_movement*L_typical/dt)*
+                 simulation_time << std::endl;
+    size = std::max(dust_size + 2*(u_highest*max_lifetime),
+                    carbon_system_size*L_typical + (max_movement*L_typical/dt)*
+                    simulation_time);
+    std::cout << "u_highest = " << u_highest << std::endl;
+    carbon_size = carbon_system_size*L_typical;
+    std::cout << "carbon_size = " << carbon_size << std::endl;
+    std::cout << "dust_size = " << dust_size << std::endl;
+    std::cout << "size = " << size << std::endl;
     return size;
 }
 
-double findCarbonDistributionSize(double carbon_density, int tot_objects,
-                                  int nbr_dust){
-    double size = std::sqrt((tot_objects - nbr_dust)/(carbon_density));
-    std::cout << tot_objects - nbr_dust << " carbon particles spread over " << size << " [ units] squared area" << std::endl;
-    return size;
+void writePositionsToFile(std::map<int, Cluster*> &clusters_test){
+    std::ofstream out_stream;
+    out_stream.open("/Users/berntsim/Documents/Master/Data/ParticleConfig.csv");
+    out_stream.precision(10);
+    typedef std::map<int, Cluster*>::iterator it_type;
+    for(it_type iterator = clusters_test.begin();
+        iterator != clusters_test.end(); iterator++){
+        if (iterator->second != nullptr){
+            for (auto&& particle:iterator->second->particles){
+                out_stream << particle.pos.x << "," << particle.pos.y
+                           << "," << particle.r_p << ","
+                           << iterator->second->index << std::endl;
+            }
+        }
+    }
+    out_stream.close( );
+}
+
+void printNumberOfClusters(std::map<int, Cluster*> &clusters_test){
+    int counter = 0;
+    typedef std::map<int, Cluster*>::iterator it_type;
+    for(it_type iterator = clusters_test.begin();
+        iterator != clusters_test.end(); iterator++){
+        if (iterator->second != nullptr){
+            counter++;
+        }
+    }
+    std::cout << "counter = " << counter << std::endl;
+}
+
+int testFindTotalCarbonOnDust(std::map<int, Cluster*> &clusters_test,
+                              double r_dust, double r_carbon){
+    typedef std::map<int, Cluster*>::iterator it_type;
+    int nbr_carbon = 0;
+    bool isDust = false;
+    for(it_type iterator = clusters_test.begin();
+        iterator != clusters_test.end(); iterator++){
+        if (iterator->second != nullptr){
+            for (auto&& particle:iterator->second->particles){
+                if (particle.r_p == r_dust){
+                    isDust = true;
+                }
+            }
+            for (auto&& particle:iterator->second->particles){
+                if ((particle.r_p == r_carbon) && (isDust)){
+                    nbr_carbon++;
+                }
+            }
+            isDust = false;
+        }
+    }
+    return nbr_carbon;
+}
+
+int largestCluster(std::map<int, Cluster*> &clusters_test){
+    typedef std::map<int, Cluster*>::iterator it_type;
+    int largest_cluster = 0;
+    int current_size = 0;
+    for(it_type iterator = clusters_test.begin();
+        iterator != clusters_test.end(); iterator++){
+        if (iterator->second != nullptr){
+            current_size = iterator->second->particles.size();
+            if (current_size > largest_cluster){
+                largest_cluster = current_size;
+            }
+        }
+    }
+    return largest_cluster;
+}
+
+double meanSizeCluster(std::map<int, Cluster*> &clusters_test){
+    typedef std::map<int, Cluster*>::iterator it_type;
+    int tot = 0;
+    int nbr_clusters = 0;
+    for(it_type iterator = clusters_test.begin();
+        iterator != clusters_test.end(); iterator++){
+        if (iterator->second != nullptr){
+            nbr_clusters++;
+            tot += iterator->second->particles.size();
+        }
+    }
+    return double(tot)/double(nbr_clusters);
+}
+
+
+double findSettlingVelocity(double rho_dust, double r_dust, double dyn_visc_air,
+                            double g, double Cc, double L_typical,
+                            double &max_lifetime){
+    double vt = (1.0/18.0)*(std::pow(2.0*r_dust*L_typical, 2.0)*rho_dust*g*Cc)/
+            dyn_visc_air;
+    max_lifetime = (r_dust*L_typical)/(vt);
+    return vt;
+}
+
+void fallOut(std::map<int, Cluster*> &clusters_test, Cluster* clust, double t,
+             double r_carbon, double r_dust, int &redist_carbon,
+             int &redist_dust, std::vector<int> &fallout_sizes){
+    if (clust != nullptr){
+        if (t > clust->lifetime){
+//            std::cout << "cluster number " << clust->index
+//                      << " had a lifetime of " << clust->lifetime
+//                      << " seconds and has now fallen out."
+//                      << std::endl;
+            redist_carbon += countParticleOccurence(clust->particles,
+                                                    r_carbon);
+            redist_dust += countParticleOccurence(clust->particles, r_dust);
+            fallout_sizes.push_back(redist_carbon);
+            clusters_test.at(clust->index) = nullptr;
+        }
+    }
+}
+
+int countParticleOccurence(std::vector<Particle> particles, double r_particle){
+    int counter = 0;
+    for (auto&& particle:particles){
+        if (particle.r_p == r_particle){
+            ++counter;
+        }
+    }
+    return counter;
+}
+
+
+void redistribute(double x_size, double y_size, int nbr_carbon, int nbr_dust,
+                  std::mt19937::result_type seed_x,
+                  std::mt19937::result_type seed_y, double r_carbon,
+                  double r_dust, std::map<int, Cluster*> &clust_test,
+                  double PI, double L_typical, double simulation_time, double t,
+                  double size_carbon, double size_dust, bool varying_size,
+                  double rho_carbon, double rho_dust, double max_lifetime,
+                  int &org_size){
+    double min_coord_x_c = (x_size/2.0 - size_carbon/2.0);
+    double max_coord_x_c = (x_size/2.0 + size_carbon/2.0);
+    double min_coord_y_c = (y_size/2.0 - size_carbon/2.0);
+    double max_coord_y_c = (y_size/2.0 + size_carbon/2.0);
+    double min_coord_x_d = (x_size/2.0 - size_dust/2.0);
+    double max_coord_x_d = (x_size/2.0 + size_dust/2.0);
+    double min_coord_y_d = (y_size/2.0 - size_dust/2.0);
+    double max_coord_y_d = (y_size/2.0 + size_dust/2.0);
+
+    auto coord_x_d = std::bind(std::uniform_real_distribution<double>(
+                                   min_coord_x_d, max_coord_x_d),
+                               std::mt19937(seed_x));
+    auto coord_y_d = std::bind(std::uniform_real_distribution<double>(
+                                   min_coord_y_d, max_coord_y_d),
+                               std::mt19937(seed_y));
+    auto coord_x_c = std::bind(std::uniform_real_distribution<double>(
+                                 min_coord_x_c, max_coord_x_c),
+                               std::mt19937(seed_x));
+    auto coord_y_c = std::bind(std::uniform_real_distribution<double>(
+                                 min_coord_y_c, max_coord_y_c),
+                               std::mt19937(seed_y));
+    auto rand_size = std::bind(std::uniform_real_distribution<double>(1.0,5.0),
+                               std::mt19937(seed_x));
+    double dist = 0;
+    int part_placed = 0;
+    Point tmp;
+    bool occupied = false;
+    std::vector<Particle> tmp_part;
+    AABB aabb_tmp = AABB(Point(), Point());
+    std::vector<AABB> areas_tmp;
+    Velocity tmp_vel;
+    int col_with = -1;
+    double m_dust = rho_dust*(4.0/3.0)*PI*std::pow(r_dust*L_typical, 3.0);
+    double m_carbon = rho_carbon*(4.0/3.0)*PI*std::pow(r_carbon*L_typical, 3.0);
+//    std::cout << "nbr_carbon = " << nbr_carbon << std::endl;
+//    std::cout << "nbr_dust = " << nbr_dust << std::endl;
+//    std::cout << "reached start of distribution" << std::endl;
+    while (part_placed < nbr_dust){
+        tmp.x = coord_x_d();
+        tmp.y = coord_y_d();
+        for (int i = 0; i < org_size; ++i){
+//            std::cout << "clust test size dust: " << clust_test.size() << std::endl;
+//            std::cout << i << std::endl;
+            if (clust_test.at(i) != nullptr){
+//                std::cout << "the clust_test.at(i) != nullptr test passed dust" << std::endl;
+//                std::cout << clust_test.at(i)->particles.size() << std::endl;
+                for (auto&& particle:clust_test.at(i)->particles){
+//                    std::cout << "we made it into the particles loop dust" << std::endl;
+                    dist = findDistance(particle.pos, tmp, x_size, y_size,
+                                        L_typical);
+//                    std::cout << "we checked distance dust" << std::endl;
+                    if (particle.r_p + r_dust > dist){
+                        occupied = true;
+                        col_with = i;
+                    }
+                }
+//                std::cout << "we exited the particle loop dust" << std::endl;
+            }
+        }
+//        std::cout << "finished dust for loop with one .at()" << std::endl;
+        if (!occupied){
+            tmp_part.push_back(Particle(tmp, r_dust));
+            aabb_tmp.bottom_right.x = tmp.x + r_dust;
+            aabb_tmp.bottom_right.y = tmp.y - r_dust;
+            aabb_tmp.top_left.x = tmp.x - r_dust;
+            aabb_tmp.top_left.y = tmp.y + r_dust;
+            areas_tmp.push_back(aabb_tmp);
+            clust_test.insert(std::make_pair(part_placed + org_size,
+                                             new Cluster(false,
+                                             areas_tmp, tmp_part, part_placed + org_size,
+                                             r_dust, tmp_vel, tmp, m_dust,
+                                             t + max_lifetime)));
+            part_placed++;
+            tmp_part.clear();
+            areas_tmp.clear();
+//            std::cout << "finished !occupied dust" << std::endl;
+        }
+        else {
+            tmp_part.push_back(Particle(tmp, r_dust));
+            aabb_tmp.bottom_right.x = tmp.x + r_dust;
+            aabb_tmp.bottom_right.y = tmp.y - r_dust;
+            aabb_tmp.top_left.x = tmp.x - r_dust;
+            aabb_tmp.top_left.y = tmp.y + r_dust;
+            areas_tmp.push_back(aabb_tmp);
+            clust_test.insert(std::make_pair(part_placed + org_size,
+                                             new Cluster(false,
+                                             areas_tmp, tmp_part, part_placed + org_size,
+                                             r_dust, tmp_vel, tmp, m_dust,
+                                             t + max_lifetime)));
+            TestJoinClusters(clust_test.at(part_placed + org_size),
+                             clust_test.at(col_with), clust_test,
+                             x_size/L_typical, y_size/L_typical, PI, rho_carbon,
+                             rho_dust, r_dust, r_carbon, L_typical);
+            part_placed++;
+            tmp_part.clear();
+            areas_tmp.clear();
+        }
+//        std::cout << "finished else dust" << std::endl;
+        occupied = false;
+    }
+    while (part_placed < nbr_carbon + nbr_dust){
+        tmp.x = coord_x_c();
+        tmp.y = coord_y_c();
+        for (int i = 0; i < org_size; ++i){
+//            std::cout << "clust test size carbon: " << clust_test.size() << std::endl;
+//            std::cout << i << std::endl;
+            if (clust_test.at(i) != nullptr){
+//                std::cout << "the clust_test.at(i) != nullptr test passed carbon" << std::endl;
+//                std::cout << clust_test.at(i)->particles.size() << std::endl;
+                for (auto&& particle:clust_test.at(i)->particles){
+//                    std::cout << "we made it into the particles loop carbon" << std::endl;
+                    dist = findDistance(particle.pos, tmp, x_size, y_size,
+                                        L_typical);
+//                    std::cout << "we checked distance carbon" << std::endl;
+                    if (particle.r_p + r_carbon > dist){
+                        occupied = true;
+                        col_with = i;
+                    }
+                }
+//                std::cout << "we exited the particle loop carbon" << std::endl;
+            }
+        }
+//        std::cout << "finished carbon for loop" << std::endl;
+        if (!occupied){
+            tmp_part.push_back(Particle(tmp, r_carbon));
+            aabb_tmp.bottom_right.x = tmp.x + r_carbon;
+            aabb_tmp.bottom_right.y = tmp.y - r_carbon;
+            aabb_tmp.top_left.x = tmp.x - r_carbon;
+            aabb_tmp.top_left.y = tmp.y + r_carbon;
+            areas_tmp.push_back(aabb_tmp);
+            clust_test.insert(std::make_pair(part_placed + org_size,
+                                             new Cluster(false,
+                                             areas_tmp, tmp_part, part_placed + org_size,
+                                             r_carbon, tmp_vel, tmp, m_carbon,
+                                             t + simulation_time)));
+            part_placed++;
+            tmp_part.clear();
+            areas_tmp.clear();
+//            std::cout << "finished !occupied carbon" << std::endl;
+        }
+        else {
+            tmp_part.push_back(Particle(tmp, r_carbon));
+            aabb_tmp.bottom_right.x = tmp.x + r_carbon;
+            aabb_tmp.bottom_right.y = tmp.y - r_carbon;
+            aabb_tmp.top_left.x = tmp.x - r_carbon;
+            aabb_tmp.top_left.y = tmp.y + r_carbon;
+            areas_tmp.push_back(aabb_tmp);
+            clust_test.insert(std::make_pair(part_placed + org_size,
+                                             new Cluster(false,
+                                             areas_tmp, tmp_part, part_placed + org_size,
+                                             r_carbon, tmp_vel, tmp, m_carbon,
+                                             t + simulation_time)));
+            TestJoinClusters(clust_test.at(part_placed + org_size),
+                             clust_test.at(col_with), clust_test, x_size,
+                             y_size, PI, rho_carbon, rho_dust, r_dust, r_carbon,
+                             L_typical);
+            part_placed++;
+            tmp_part.clear();
+            areas_tmp.clear();
+        }
+        occupied = false;
+//        std::cout << "finished occupied carbon" << std::endl;
+    }
+    org_size += nbr_carbon;
+    org_size += nbr_dust;
+//    std::cout << "org_size = " << org_size << std::endl;
+}
+
+int findTotAmountPart(std::map<int, Cluster*> &clusters_test){
+    typedef std::map<int, Cluster*>::iterator it_type;
+    int tot = 0;
+    for(it_type iterator = clusters_test.begin();
+        iterator != clusters_test.end(); iterator++){
+        if (iterator->second != nullptr){
+            tot += iterator->second->particles.size();
+        }
+    }
+    return tot;
+}
+
+
+Point mapToVelDomain(double size, double vel_size, Point CM){
+//    std::cout << "CM.x = " << CM.x << std::endl;
+//    std::cout << "CM.y = " << CM.y << std::endl;
+//    std::cout << "size = " << size << std::endl;
+    double vel_min = (size - vel_size)/2.0;
+    double vel_max = size - vel_min;
+//    std::cout << "vel_min = " << vel_min << std::endl;
+//    std::cout << "vel_max = " << vel_max << std::endl;
+    Point ret = CM;
+    ret.x = std::fmod(CM.x, vel_size);
+    ret.y = std::fmod(CM.y, vel_size);
+
+
+//    if (CM.x < vel_min){
+//        ret.x = CM.x + vel_size;
+//    }
+//    else if (CM.x >= vel_max){
+//        ret.x = CM.x - vel_size;
+//    }
+//    if (CM.y < vel_min){
+//        ret.y = CM.y + vel_size;
+//    }
+//    else if (CM.y >= vel_max){
+//        ret.y = CM.y - vel_size;
+//    }
+    if ((ret.x == 0) || (ret.y == 0)){
+        std::cout << "OH SHIT" << std::endl;
+    }
+    return ret;
 }
