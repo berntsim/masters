@@ -19,8 +19,9 @@ int main(){
     double y_size = 1500;
     int nbr_particles = 20000;
     int nbr_dust = 90;
-    double r_p = 1.0;
-    double r_dust = 100;
+    double L_typical = 2.0*std::pow(10.0, -8.0);                                //Typical length scale of the system is set to 20 nm per unit. [m]
+    double r_p = (2.0*std::pow(10.0, -8))/L_typical;
+    double r_dust = std::pow(10.0, -6.0)/L_typical;
     double u_0 = 0.18;
     int vel_generations = 9;
 
@@ -35,16 +36,16 @@ int main(){
     double p2 = 1.0 - p1;
     double rho_air = 1.29;                                                      //Mass density of air [kg/m^3]
     double rho_carbon = 2000.0;                                                 //Mass density of carbon particles [kg/m^3]
-    double rho_dust = ((2.65+2.60+2.75+2.35+2.82+2.95+2.71+2.87+2.30)/9.0)*1000;//Mass density of dust particles [kg/m^3]
-    double L_typical = 1.0*std::pow(10.0, -8.0);                                //Typical length scale of the system is set to 10 nm per unit. [m]
+//    double rho_dust = ((2.65+2.60+2.75+2.35+2.82+2.95+2.71+2.87+2.30)/9.0)*1000;//Mass density of dust particles [kg/m^3]
+    double rho_dust = 2500;
     double C_sphere = 0.47;
     double carbon_density = 0.0;
     double dust_density = 0.0;
-    double carbon_system_size = 200000;
-    double dust_system_size = 5000;
+    double carbon_system_size = 0.001/L_typical;                                // [m]/L_typical
+    double dust_system_size = 0.5/L_typical;                                    // [m]/L_typical
     double simulation_time = 1.0;
     double diff_threshold = 1.0*std::pow(10.0, -6.0);                           // [m]
-    double dt = 1000.0/(u_0/L_typical);                                           //timestep per iteration. [s]
+    double dt = 500.0/(u_0/L_typical);                                           //timestep per iteration. [s]
     double Cc = 10.0;                                                             //Cunningham correction factor
     double dyn_visc_air = 1.8*std::pow(10.0, -5.0);
     double gravity = 9.8;
@@ -87,7 +88,6 @@ int main(){
 
     AABB domain = AABB(Point(0,reduced_size), Point(reduced_size,0));
     Quadtree tree(domain);
-
 //---------------------------------Seeding RNG ---------------------------------
     int i_max = std::numeric_limits<int>::max();
     std::mt19937::result_type seed = time(0);
@@ -110,7 +110,7 @@ int main(){
                             red_dust_size, visualize, max_lifetime,
                             simulation_time);
     typedef std::map<int, Cluster*>::iterator it_type;
-    vel_size = (reduced_size)/3.0;
+    vel_size = (reduced_size)/1.0;
     std::cout << "turbulence size = " << vel_size*L_typical << std::endl;
     AABB_vel vel_domain = AABB_vel(Point(0, vel_size),
                                    Point(vel_size, 0));
@@ -124,17 +124,21 @@ int main(){
     Quadtree_vel vel_tree(vel_domain, init_eddy, 0, 0.0,
                               findLifetime(init_eddy, L_typical), p_list);
     vel_tree.subdivide_vel(g, rand_seed(), PI, vel_generations, L_typical);
-    printTurnovertimes(vel_tree, L_typical);
-    string filename = "/Users/berntsim/Documents/Master/Data/c" +
-                        to_string(int(nbr_particles/1000)) + "k_d" +
-                        to_string(int(nbr_dust/1000)) + "k_" +
-                        to_string(int(red_dust_size/1000)) +
-                        "k_" +
-                         to_string(int(red_carb_size/1000))
-                        +  "k.txt";
+//    printTurnovertimes(vel_tree, L_typical);
+//    string filename = "/Users/berntsim/Documents/Master/Data/c" +
+    string filename = "c" +
+                       to_string(int(nbr_particles/1000)) + "k_d" +
+                       to_string(int(nbr_dust)) + "_" +
+                       to_string(int(red_dust_size/1000)) +
+                       "k_" +
+                       to_string(int(red_carb_size/1000)) + "k_u" +
+                       to_string(u_0) + "_" + to_string(int(simulation_time)) +
+                       "s.txt";
     std::ofstream out_stream;
     out_stream.open(filename);
     const clock_t begin_time = clock();
+    std::cout << "x_size main before sim = " << x_size << std::endl;
+    std::cout << "x_size_reduced main before sim = " << reduced_size << std::endl;
 //---------------------------------Simulations----------------------------------
     if (visualize){
         return 0;
@@ -192,7 +196,7 @@ int main(){
             }
             tree.clearQadtree();
             testPutInQuadtree(clusters_test, tree);
-            writePositionsToFile(clusters_test);
+//            writePositionsToFile(clusters_test);
             tot_fallout_carbon += redist_carb;
             out_stream << t << "    "
                        << testFindTotalCarbonOnDust(clusters_test, r_dust, r_p)

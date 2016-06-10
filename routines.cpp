@@ -92,6 +92,9 @@ void distributeParticlesTest(double len, double height, int nbr_particles,
     Velocity tmp_vel;
     double m_dust = rho_dust*PI*(4.0/3.0)*std::pow(r_dust*L_typical, 3.0);
     double m_carbon = rho_carbon*PI*(4.0/3.0)*std::pow(r_p*L_typical, 3.0);
+//    std::cout << "r_dust = " << r_dust*L_typical << " m" << std::endl;
+//    std::cout << "m_carbon = " << m_carbon << std::endl;
+//    std::cout << "m_dust = " << m_dust << std::endl;
 
     while (int(clusters.size()) < nbr_dust){
         tmp.x = coord_x_d();
@@ -161,7 +164,6 @@ void distributeParticlesTest(double len, double height, int nbr_particles,
     }
 }
 
-
 void testPutInQuadtree(std::map<int, Cluster*> clusters, Quadtree &qtree){
     typedef std::map<int, Cluster*>::iterator it_type;
     for(it_type iterator = clusters.begin(); iterator != clusters.end(); iterator++){
@@ -179,53 +181,203 @@ void takeSingleStep(double step_dir, double len, Cluster* cluster, double x_size
             particle.pos.y += len*std::sin(step_dir);
             if (particle.pos.x < 0){
                 particle.pos.x += x_size;
-                std::cout << "pos = " << particle.pos.x << std::endl;
-                std::cout << "We have a problem 1" << std::endl;
+//                std::cout << "pos = " << particle.pos.x << std::endl;
+//                std::cout << "We have a problem 1" << std::endl;
             }
             else if (particle.pos.x >= x_size){
                 particle.pos.x -= x_size;
-                std::cout << "pos = " << particle.pos.x << std::endl;
-                std::cout << "We have a problem 2" << std::endl;
+//                std::cout << "pos = " << particle.pos.x << std::endl;
+//                std::cout << "We have a problem 2" << std::endl;
             }
             if (particle.pos.y < 0){
                 particle.pos.y += y_size;
-                std::cout << "pos = " << particle.pos.y << std::endl;
-                std::cout << "We have a problem 3" << std::endl;
+//                std::cout << "pos = " << particle.pos.y << std::endl;
+//                std::cout << "We have a problem 3" << std::endl;
             }
             else if (particle.pos.y >= y_size){
                 particle.pos.y -= y_size;
-                std::cout << "pos = " << particle.pos.y << std::endl;
-                std::cout << "We have a problem 4" << std::endl;
+//                std::cout << "pos = " << particle.pos.y << std::endl;
+//                std::cout << "We have a problem 4" << std::endl;
             }
+        }
+        std::vector<AABB> to_add;
+        AABB temp(Point(0,0), Point(0,0));
+        while (cluster->areas.size() > 1){
+            cluster->areas.pop_back();
         }
         for (auto&& area:cluster->areas){
             area.top_left.x += len*std::cos(step_dir);
             area.bottom_right.x += len*std::cos(step_dir);
             area.top_left.y += len*std::sin(step_dir);
             area.bottom_right.y += len*std::sin(step_dir);
-            if (area.top_left.x < 0){
-                area.top_left.x += x_size;
+            if ((crossXBound(*cluster, x_size)) &&
+                (!crossYBound(*cluster, y_size))){
+//                std::cout << "crossing x-bound" << std::endl;
+                if (std::cos(step_dir) <= 0){
+//                    std::cout << "moving to the left" << std::endl;
+                    temp.top_left.x = area.top_left.x + x_size;
+                    temp.top_left.y = area.top_left.y;
+                    temp.bottom_right.x = area.bottom_right.x + x_size;
+                    temp.bottom_right.y = area.bottom_right.y;
+                    to_add.push_back(temp);
+                }
+                else if (std::cos(step_dir) == 0){
+                    std::cout << "there is no movement in x-direction" << std::endl;
+                }
+                else {
+//                    std::cout << "we come from the left" << std::endl;
+                    temp.top_left.x = area.top_left.x - x_size;
+                    temp.top_left.y = area.top_left.y;
+                    temp.bottom_right.x = area.bottom_right.x - x_size;
+                    temp.bottom_right.y = area.bottom_right.y;
+                    to_add.push_back(temp);
+                }
             }
-            else if (area.top_left.x > x_size){
-                area.top_left.x -= x_size;
+            if ((crossYBound(*cluster, y_size)) &&
+                (!crossXBound(*cluster, x_size))){
+//                std::cout << "crossing y-bound" << std::endl;
+                if (std::sin(step_dir) <= 0){
+//                    std::cout << "we come from above" << std::endl;
+                    temp.top_left.x = area.top_left.x;
+                    temp.top_left.y = area.top_left.y + y_size;
+                    temp.bottom_right.x = area.bottom_right.x;
+                    temp.bottom_right.y = area.bottom_right.y + y_size;
+                    to_add.push_back(temp);
+                }
+                else if (std::sin(step_dir) == 0){
+                    std::cout << "there is no movement in y-direction" << std::endl;
+                }
+                else {
+//                    std::cout << "we come from below" << std::endl;
+                    temp.top_left.x = area.top_left.x;
+                    temp.top_left.y = area.top_left.y - y_size;
+                    temp.bottom_right.x = area.bottom_right.x;
+                    temp.bottom_right.y = area.bottom_right.y - y_size;
+                    to_add.push_back(temp);
+                }
             }
+            else if ((crossYBound(*cluster, y_size)) &&
+                     (crossXBound(*cluster, x_size))){
+//                std::cout << "the cluster crosses both axes" << std::endl;
+                if (std::cos(step_dir) > 0){
+//                    std::cout << "moving in the right direction" << std::endl;
+                    if (std::sin(step_dir) > 0){
+//                        std::cout << "we move up" << std::endl;
+                        temp.top_left.x = area.top_left.x;
+                        temp.top_left.y = area.top_left.y - y_size;
+                        temp.bottom_right.x = area.bottom_right.x;
+                        temp.bottom_right.y = area.bottom_right.y - y_size;
+                        to_add.push_back(temp);                                 //pushing area 1.
+                        temp.top_left.x = area.top_left.x - x_size;
+                        temp.top_left.y = area.top_left.y - y_size;
+                        temp.bottom_right.x = area.bottom_right.x - x_size;
+                        temp.bottom_right.y = area.bottom_right.y - y_size;
+                        to_add.push_back(temp);                                 //pushing area 2.
+                        temp.top_left.x = area.top_left.x - x_size;
+                        temp.top_left.y = area.top_left.y;
+                        temp.bottom_right.x = area.bottom_right.x - x_size;
+                        temp.bottom_right.y = area.bottom_right.y;
+                        to_add.push_back(temp);                                 //pushing area 3.
+                        temp.top_left.x = area.top_left.x;
+                        temp.top_left.y = area.top_left.y;
+                        temp.bottom_right.x = area.bottom_right.x;
+                        temp.bottom_right.y = area.bottom_right.y;
+                        to_add.push_back(temp);                                 //pushing area 4.
+                    }
+                    else {
+//                        std::cout << "we move down" << std::endl;
+                        temp.top_left.x = area.top_left.x;
+                        temp.top_left.y = area.top_left.y;
+                        temp.bottom_right.x = area.bottom_right.x;
+                        temp.bottom_right.y = area.bottom_right.y;
+                        to_add.push_back(temp);                                 //pushing area 1.
+                        temp.top_left.x = area.top_left.x - x_size;
+                        temp.top_left.y = area.top_left.y;
+                        temp.bottom_right.x = area.bottom_right.x - x_size;
+                        temp.bottom_right.y = area.bottom_right.y;
+                        to_add.push_back(temp);                                 //pushing area 2.
+                        temp.top_left.x = area.top_left.x - x_size;
+                        temp.top_left.y = area.top_left.y + y_size;
+                        temp.bottom_right.x = area.bottom_right.x - x_size;
+                        temp.bottom_right.y = area.bottom_right.y + y_size;
+                        to_add.push_back(temp);                                 //pushing area 3.
+                        temp.top_left.x = area.top_left.x;
+                        temp.top_left.y = area.top_left. y + y_size;
+                        temp.bottom_right.x = area.bottom_right.x;
+                        temp.bottom_right.y = area.bottom_right.y + y_size;
+                        to_add.push_back(temp);                                 //pushing area 4.
+                    }
+                }
+                else {
+//                    std::cout << "we move in the left direction" << std::endl;
+                    if (std::sin(step_dir) > 0){
+//                        std::cout << "we move up" << std::endl;
+                        temp.top_left.x = area.top_left.x + x_size;
+                        temp.top_left.y = area.top_left.y - y_size;
+                        temp.bottom_right.x = area.bottom_right.x + x_size;
+                        temp.bottom_right.y = area.bottom_right.y - y_size;
+                        to_add.push_back(temp);                                 //pushing area 1.
+                        temp.top_left.x = area.top_left.x;
+                        temp.top_left.y = area.top_left.y - y_size;
+                        temp.bottom_right.x = area.bottom_right.x;
+                        temp.bottom_right.y = area.bottom_right.y - y_size;
+                        to_add.push_back(temp);                                 //pushing area 2.
+                        temp.top_left.x = area.top_left.x;
+                        temp.top_left.y = area.top_left.y;
+                        temp.bottom_right.x = area.bottom_right.x;
+                        temp.bottom_right.y = area.bottom_right.y;
+                        to_add.push_back(temp);                                 //pushing area 3.
+                        temp.top_left.x = area.top_left.x + x_size;
+                        temp.top_left.y = area.top_left.y;
+                        temp.bottom_right.x = area.bottom_right.x + x_size;
+                        temp.bottom_right.y = area.bottom_right.y;
+                        to_add.push_back(temp);                                 //pushing area 4.
+                    }
+                    else {
+//                        std::cout << "we move down" << std::endl;
+                        temp.top_left.x = area.top_left.x + x_size;
+                        temp.top_left.y = area.top_left.y;
+                        temp.bottom_right.x = area.bottom_right.x + x_size;
+                        temp.bottom_right.y = area.bottom_right.y;
+                        to_add.push_back(temp);                                 //pushing area 1.
+                        temp.top_left.x = area.top_left.x;
+                        temp.top_left.y = area.top_left.y;
+                        temp.bottom_right.x = area.bottom_right.x;
+                        temp.bottom_right.y = area.bottom_right.y;
+                        to_add.push_back(temp);                                 //pushing area 2.
+                        temp.top_left.x = area.top_left.x;
+                        temp.top_left.y = area.top_left.y + y_size;
+                        temp.bottom_right.x = area.bottom_right.x;
+                        temp.bottom_right.y = area.bottom_right.y + y_size;
+                        to_add.push_back(temp);                                 //pushing area 3.
+                        temp.top_left.x = area.top_left.x + x_size;
+                        temp.top_left.y = area.top_left.y + y_size;
+                        temp.bottom_right.x = area.bottom_right.x + x_size;
+                        temp.bottom_right.y = area.bottom_right.y + y_size;
+                        to_add.push_back(temp);                                 //pushing area 4.
+
+                    }
+                }
+            }
+
             if (area.bottom_right.x < 0){
                 area.bottom_right.x += x_size;
+                area.top_left.x += x_size;
             }
-            else if (area.bottom_right.x > x_size){
-                area.bottom_right.x -= x_size;
-            }
-            if (area.top_left.y > y_size){
-                area.top_left.y -= y_size;
-            }
-            else if (area.top_left.y < 0){
+            if (area.top_left.y < 0){
                 area.top_left.y += y_size;
+                area.bottom_right.y += y_size;
+            }
+            if (area.top_left.x > x_size){
+                area.top_left.x -= x_size;
+                area.bottom_right.x -= x_size;
             }
             if (area.bottom_right.y > y_size){
                 area.bottom_right.y -= y_size;
+                area.top_left.y -= y_size;
             }
-            else if (area.bottom_right.y < 0){
-                area.bottom_right.y += y_size;
+            for (auto&& area:to_add){
+                cluster->areas.push_back(area);
             }
         }
     }
@@ -327,11 +479,15 @@ void TestJoinClusters(Cluster* clust, Cluster* other,
                       double L_typical){
     if ((clust != nullptr) && (other != nullptr)){
         if (clust->index != other->index){
-//            if (other->index >= 10500){
-//                std::cout << other->index << std::endl;
-//                std::cout << "a dust particle with index > 10500 has collided" << std::endl;
-//            }
-            updateAreas(clust, other);
+            int clust_intersect_index = -1;
+            int oai = intersectingIdx(clust->areas, other->areas,
+                                      clust_intersect_index);
+            if ((clust_intersect_index > 0) || (oai > 0)){
+                std::cout << "cai = " << clust_intersect_index << std::endl;
+                std::cout << "oai = " << oai << std::endl;
+            }
+            updateAreas(clust, other, x_size, y_size, clust_intersect_index,
+                        oai);
             consMomentum(clust, *other, PI);
             clust->mass += other->mass;
             clust->particles.insert(clust->particles.end(),
@@ -360,46 +516,12 @@ void TestJoinClusters(Cluster* clust, Cluster* other,
     }
 }
 
-
 bool crossXBound(Cluster clust, int x_size){
-    if (clust.areas.size() == 1){
-        if (((clust.areas[0].top_left.x <= x_size) &&
-             (clust.areas[0].top_left.x > x_size/2.0)) &&
-            ((clust.areas[0].bottom_right.x >= 0) &&
-             (clust.areas[0].bottom_right.x < x_size/2.0))){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else if (clust.areas.size() == 2){
-        if (((clust.areas[0].top_left.x <= x_size) &&
-             (clust.areas[0].top_left.x > x_size/2.0)) &&                       // when the separation of the boxes are vertical
-            ((clust.areas[1].bottom_right.x >= 0) &&
-             (clust.areas[1].bottom_right.x < x_size/2.0))){
-            return true;
-        }
-        else if (((clust.areas[0].top_left.x <= x_size) &&
-                  (clust.areas[0].top_left.x > x_size/2.0)) &&                  //Horizontal
-                 ((clust.areas[0].bottom_right.x >= 0) &&
-                  (clust.areas[0].bottom_right.x < x_size/2.0))){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else if (clust.areas.size() == 4){
-        if (((clust.areas[0].top_left.x <= x_size) &&
-             (clust.areas[0].top_left.x > x_size/2.0)) &&
-            ((clust.areas[1].bottom_right.x >= 0) &&
-             (clust.areas[1].bottom_right.x < x_size/2.0))){
-            return true;
-        }
-        else {
-            return false;
-        }
+    if (((clust.areas[0].top_left.x <= x_size) &&
+        (clust.areas[0].bottom_right.x > x_size)) ||
+        ((clust.areas[0].top_left.x <= 0) &&
+         (clust.areas[0].bottom_right.x > 0))){
+        return true;
     }
     else {
         return false;
@@ -407,44 +529,11 @@ bool crossXBound(Cluster clust, int x_size){
 }
 
 bool crossYBound(Cluster clust, int y_size){
-    if (clust.areas.size() == 1){
-        if (((clust.areas[0].top_left.y >= 0) &&
-             (clust.areas[0].top_left.y < y_size/2.0)) &&
-            ((clust.areas[0].bottom_right.y <= y_size) &&
-             (clust.areas[0].bottom_right.y > y_size/2.0))){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else if (clust.areas.size() == 2){
-        if (((clust.areas[0].top_left.y >= 0) &&
-             (clust.areas[0].top_left.y < y_size/2.0)) &&                       // when the separation of the boxes are horizontal
-            ((clust.areas[1].bottom_right.y <= y_size) &&
-             (clust.areas[1].bottom_right.y > y_size/2.0))){
-            return true;
-        }
-        else if (((clust.areas[0].top_left.y >= 0) &&
-                  (clust.areas[0].top_left.y < y_size/2.0)) &&                  //vertical
-                 ((clust.areas[0].bottom_right.y <= y_size) &&
-                  (clust.areas[0].bottom_right.y > y_size/2.0))){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    else if (clust.areas.size() == 4){
-        if (((clust.areas[0].top_left.y >= 0) &&
-             (clust.areas[0].top_left.y < y_size/2.0)) &&
-            ((clust.areas[2].bottom_right.y <= y_size) &&
-             (clust.areas[2].bottom_right.y > y_size/2.0))){
-            return true;
-        }
-        else {
-            return false;
-        }
+    if (((clust.areas[0].top_left.y >= y_size) &&
+        (clust.areas[0].bottom_right.y < y_size)) ||
+        ((clust.areas[0].top_left.y >= 0) &&
+         (clust.areas[0].bottom_right.y < 0))){
+        return true;
     }
     else {
         return false;
@@ -463,18 +552,8 @@ AABB testFindSearchRange(AABB area, double step_len){
 std::vector<Cluster> testBPcolCheck(AABB search_range, Quadtree &tree){
     std::vector<Cluster> ret_vec;
     ret_vec = tree.queryRange(search_range);
-//    std::cout << "ret_vec.size() (BPColCheck) = " << ret_vec.size() << std::endl;
-    if (ret_vec.size() == 1){
-//        std::cout << "ret_vec[0].index (BPColCheck) = " << ret_vec[0].index << std::endl;
-    }
-    if (ret_vec.size() > 1){
-        return ret_vec;
-    }
-    else {
-        return {};
-    }
+    return ret_vec;
 }
-
 
 int nbrAreasOut(Cluster* clust, Cluster* other, int x_size, int y_size){
     if ((clust != nullptr) && (other != nullptr)){
@@ -496,16 +575,17 @@ int nbrAreasOut(Cluster* clust, Cluster* other, int x_size, int y_size){
     }
 }
 
-void updateAreas(Cluster* clust, Cluster* other){
-        clust->areas[0].top_left.x = std::min(clust->areas[0].top_left.x,
-                                              other->areas[0].top_left.x);
-        clust->areas[0].top_left.y = std::max(clust->areas[0].top_left.y,
-                                              other->areas[0].top_left.y);
-        clust->areas[0].bottom_right.x=std::max(clust->areas[0].bottom_right.x,
-                                                other->areas[0].bottom_right.x);
-        clust->areas[0].bottom_right.y=std::min(clust->areas[0].bottom_right.y,
-                                                other->areas[0].bottom_right.y);
-        return;
+void updateAreas(Cluster* clust, Cluster* other, double x_size, double y_size,
+                 int cai, int oai){                                             //clust area index and other area index.
+    clust->areas[0].top_left.x = std::min(clust->areas[cai].top_left.x,
+                                          other->areas[oai].top_left.x);
+    clust->areas[0].top_left.y = std::max(clust->areas[cai].top_left.y,
+                                          other->areas[oai].top_left.y);
+    clust->areas[0].bottom_right.x = std::max(clust->areas[cai].bottom_right.x,
+                                            other->areas[oai].bottom_right.x);
+    clust->areas[0].bottom_right.y = std::min(clust->areas[cai].bottom_right.y,
+                                            other->areas[oai].bottom_right.y);
+    return;
 }
 
 double findLifetime(eddy e, double L_typical){
@@ -662,20 +742,16 @@ double findSystemSize(double r_p, double Cc, double PI, double dt,
         u_highest += std::sqrt(std::pow(p1, i)*E_0);
     }
     double max_movement = u_highest*(dt/L_typical) + diff_step_len/L_typical;   //units/timestep is the the dimensionless displacement.
-    double size = 2*max_movement*(L_typical/dt)*simulation_time +
-                carbon_size*L_typical;
-    dust_size = 0.5;
-    std::cout << "max dust = " << dust_size + 2*(u_highest*max_lifetime) << std::endl;
-    std::cout << "max carbon = " << carbon_system_size*L_typical + (max_movement*L_typical/dt)*
-                 simulation_time << std::endl;
-    size = std::max(dust_size + 2*(u_highest*max_lifetime),
-                    carbon_system_size*L_typical + (max_movement*L_typical/dt)*
-                    simulation_time);
-    std::cout << "u_highest = " << u_highest << std::endl;
+    double size = 0;
+//    dust_size = 0.1;
+    dust_size = dust_system_size*L_typical;
+    size = dust_size + 2*(u_highest*max_lifetime);
     carbon_size = carbon_system_size*L_typical;
     std::cout << "carbon_size = " << carbon_size << std::endl;
-    std::cout << "dust_size = " << dust_size << std::endl;
-    std::cout << "size = " << size << std::endl;
+    std::cout << "carbon_system_size = " << carbon_system_size << std::endl;
+
+//    size = dust_size;
+//    carbon_size = dust_size;
     return size;
 }
 
@@ -1020,4 +1096,118 @@ Point mapToVelDomain(double size, double vel_size, Point CM){
         std::cout << "OH SHIT" << std::endl;
     }
     return ret;
+}
+
+void insertResult(std::vector<Cluster> tmp_res, std::vector<Cluster> &full_res,
+                  int idx){
+    for (auto&& clust:tmp_res){
+        if (clust.index != idx){
+            full_res.push_back(clust);
+        }
+    }
+}
+
+int determineRegion(Cluster clust, double x_size, double y_size){
+    AABB area = clust.areas[0];
+    if ((area.top_left.y > y_size) && (area.top_left.x < 0)){
+        return 0;
+    }
+    if ((area.bottom_right.x > x_size) && (area.top_left.y > y_size)){
+        return 4;
+    }
+    if ((area.bottom_right.x > x_size) && (area.bottom_right.y < 0)){
+        return 8;
+    }
+    if ((area.top_left.x < 0) && (area.bottom_right.y < 0)){
+        return 12;
+    }
+    if ((area.top_left.y > y_size) && (area.top_left.x < x_size/2.0)){
+        return 3;
+    }
+    if ((area.top_left.y > y_size) && (area.bottom_right.x > x_size/2.0)){
+        return 1;
+    }
+    if (area.top_left.y > y_size){
+        return 2;
+    }
+    if ((area.bottom_right.x > x_size) && (area.bottom_right.y > y_size/2.0)){
+        return 5;
+    }
+    if ((area.bottom_right.x > x_size) && (area.top_left.y < y_size/2.0)){
+        return 7;
+    }
+    if (area.bottom_right.x > x_size){
+        return 6;
+    }
+    if ((area.bottom_right.y < 0) && (area.top_left.x > x_size/2.0)){
+        return 9;
+    }
+    if ((area.bottom_right.y < 0) && (area.bottom_right.x < x_size/2.0)){
+        return 11;
+    }
+    if (area.bottom_right.y < 0){
+        return 10;
+    }
+    if ((area.top_left.x < 0) && (area.top_left.y < y_size/2.0)){
+        return 13;
+    }
+    if ((area.top_left.x < 0) && (area.bottom_right.y > y_size/2.0)){
+        return 15;
+    }
+    if (area.top_left.x < 0){
+        return 14;
+    }
+    return -1;
+}
+
+void mapTo(int clust_idx, int other_idx, Cluster* other, double x_size,
+           double y_size){
+    std::cout << "other orientation index = " << other_idx << std::endl;
+    if (clust_idx == 0){
+        if ((other_idx == 4) || (other_idx == 5)){
+            other->areas[0].top_left.x -= x_size;
+            other->areas[0].bottom_right.x -= x_size;
+            return;
+        }
+        else if (other_idx == 8){
+            other->areas[0].top_left.x -= x_size;
+            other->areas[0].top_left.y += y_size;
+            other->areas[0].bottom_right.x -= x_size;
+            other->areas[0].bottom_right.y += y_size;
+            return;
+        }
+        else if ((other_idx == 11) || (other_idx == 12)){
+            other->areas[0].top_left.y += y_size;
+            other->areas[0].bottom_right.y += y_size;
+            return;
+        }
+        else {
+            return;
+        }
+    }
+    else if (clust_idx == 1){
+        if ((other_idx == 4) || (other_idx == 5) || (other_idx == 6)){
+            other->areas[0].top_left.y += y_size;
+            other->areas[0].bottom_right.y += y_size;
+            return;
+        }
+        else {
+            return;
+        }
+    }
+
+}
+
+int intersectingIdx(std::vector<AABB> areas_clust,
+                    std::vector<AABB> areas_other, int &clust_index){
+    int index = -1;
+    for (int i = 0; i < int(areas_clust.size()); ++i){
+        for (int j = 0; j < int(areas_other.size()); ++j){
+            if (areas_clust[i].intersects(areas_other[j])){
+                index = j;
+                clust_index = i;
+            }
+        }
+    }
+    return index;
 }

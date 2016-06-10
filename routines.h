@@ -41,21 +41,6 @@ double NPColCheck(Cluster* cluster, std::vector<Cluster> targets,
                   double x_size, double y_size,
                   std::map<int, Cluster*> &clust_test);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 void TestJoinClusters(Cluster* clust, Cluster* other,
                       std::map<int, Cluster*> &clusters, double x_size,
                       double y_size, double PI, double rho_carbon,
@@ -72,7 +57,8 @@ std::vector<Cluster> testBPcolCheck(AABB search_range, Quadtree &tree);
 
 int nbrAreasOut(Cluster* one, Cluster* other, int x_size, int y_size);
 
-void updateAreas(Cluster* clust, Cluster* other);
+void updateAreas(Cluster* clust, Cluster* other, double x_size, double y_size,
+                 int cai, int oai);
 
 double findLifetime(eddy e, double L_typical);
 
@@ -131,5 +117,16 @@ void redistribute(double x_size, double y_size, int nbr_carbon, int nbr_dust,
 int findTotAmountPart(std::map<int, Cluster*> &clusters_test);
 
 Point mapToVelDomain(double size, double vel_size, Point CM);
+
+void insertResult(std::vector<Cluster> tmp_res, std::vector<Cluster> &full_res,
+                  int idx);
+
+int determineRegion(Cluster clust, double x_size, double y_size);
+
+void mapTo(int clust_idx, int other_idx, Cluster* other, double x_size,
+           double y_size);
+
+int intersectingIdx(std::vector<AABB> areas_clust,
+                    std::vector<AABB> areas_other, int &clust_index);
 
 #endif // ROUTINES_H
