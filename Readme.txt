@@ -1,5 +1,5 @@
 This is the code used for a masters thesis trying to simulate the mixing of
-black carbon aerosols and mineral dust particles. The code uses diffusion-limited cluster aggregation and multifractal velocity fields to accomplish this. It is licensed under the MiT licence (https://opensource.org/licenses/MIT).
+black carbon aerosols and mineral dust particles. The code uses diffusion-limited cluster aggregation and multifractal velocity fields to accomplish this. It is licensed under the MiT licence (https://opensource.org/licenses/MIT). In the event that someone finds this code useful, please contact me and let me know, and I'll be happy to help in any way possible!
 
 The code is structured relatively poorly, just to make uploading it to the cluster on which simulations were ran easy. This is also partly due to the inexperience of the author. The important aspects are however:
 
